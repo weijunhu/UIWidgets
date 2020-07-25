@@ -46,10 +46,12 @@ namespace Unity.UIWidgets.material {
             List<Widget> actions = null,
             Widget flexibleSpace = null,
             PreferredSizeWidget bottom = null,
-            float elevation = 4.0f,
+            float? elevation = null,
+            ShapeBorder shape = null,
             Color backgroundColor = null,
             Brightness? brightness = null,
             IconThemeData iconTheme = null,
+            IconThemeData actionsIconTheme = null,
             TextTheme textTheme = null,
             bool primary = true,
             bool? centerTitle = null,
@@ -57,6 +59,7 @@ namespace Unity.UIWidgets.material {
             float toolbarOpacity = 1.0f,
             float bottomOpacity = 1.0f
         ) : base(key: key) {
+            D.assert(elevation == null || elevation >= 0.0);
             this.leading = leading;
             this.automaticallyImplyLeading = automaticallyImplyLeading;
             this.title = title;
@@ -64,9 +67,11 @@ namespace Unity.UIWidgets.material {
             this.flexibleSpace = flexibleSpace;
             this.bottom = bottom;
             this.elevation = elevation;
+            this.shape = shape;
             this.backgroundColor = backgroundColor;
             this.brightness = brightness;
             this.iconTheme = iconTheme;
+            this.actionsIconTheme = actionsIconTheme;
             this.textTheme = textTheme;
             this.primary = primary;
             this.centerTitle = centerTitle;
@@ -88,13 +93,17 @@ namespace Unity.UIWidgets.material {
 
         public readonly PreferredSizeWidget bottom;
 
-        public readonly float elevation;
+        public readonly float? elevation;
+
+        public readonly ShapeBorder shape;
 
         public readonly Color backgroundColor;
 
         public readonly Brightness? brightness;
 
         public readonly IconThemeData iconTheme;
+
+        public readonly IconThemeData actionsIconTheme;
 
         public readonly TextTheme textTheme;
 
@@ -130,6 +139,8 @@ namespace Unity.UIWidgets.material {
 
 
     class _AppBarState : State<AppBar> {
+        const float _defaultElevation = 4.0f;
+
         void _handleDrawerButton() {
             Scaffold.of(this.context).openDrawer();
         }
@@ -141,6 +152,7 @@ namespace Unity.UIWidgets.material {
         public override Widget build(BuildContext context) {
             D.assert(MaterialD.debugCheckHasMaterialLocalizations(context));
             ThemeData themeData = Theme.of(context);
+            AppBarTheme appBarTheme = AppBarTheme.of(context);
             ScaffoldState scaffold = Scaffold.of(context, nullOk: true);
             ModalRoute parentRoute = ModalRoute.of(context);
 
@@ -149,9 +161,18 @@ namespace Unity.UIWidgets.material {
             bool canPop = parentRoute?.canPop ?? false;
             bool useCloseButton = parentRoute is PageRoute && ((PageRoute) parentRoute).fullscreenDialog;
 
-            IconThemeData appBarIconTheme = this.widget.iconTheme ?? themeData.primaryIconTheme;
-            TextStyle centerStyle = this.widget.textTheme?.title ?? themeData.primaryTextTheme.title;
-            TextStyle sideStyle = this.widget.textTheme?.body1 ?? themeData.primaryTextTheme.body1;
+            IconThemeData overallIconTheme = this.widget.iconTheme
+                                            ?? appBarTheme.iconTheme
+                                            ?? themeData.primaryIconTheme;
+            IconThemeData actionsIconTheme = this.widget.actionsIconTheme
+                                             ?? appBarTheme.actionsIconTheme
+                                             ?? overallIconTheme;
+            TextStyle centerStyle = this.widget.textTheme?.title
+                                    ?? appBarTheme.textTheme?.title
+                                    ?? themeData.primaryTextTheme.title;
+            TextStyle sideStyle = this.widget.textTheme?.body1
+                                  ?? appBarTheme.textTheme?.body1
+                                  ?? themeData.primaryTextTheme.body1;
 
             if (this.widget.toolbarOpacity != 1.0f) {
                 float opacity =
@@ -164,8 +185,11 @@ namespace Unity.UIWidgets.material {
                     sideStyle = sideStyle.copyWith(color: sideStyle.color.withOpacity(opacity));
                 }
 
-                appBarIconTheme = appBarIconTheme.copyWith(
-                    opacity: opacity * (appBarIconTheme.opacity ?? 1.0f)
+                overallIconTheme = overallIconTheme.copyWith(
+                    opacity: opacity * (overallIconTheme.opacity ?? 1.0f)
+                );
+                actionsIconTheme = actionsIconTheme.copyWith(
+                    opacity: opacity * (actionsIconTheme.opacity ?? 1.0f)
                 );
             }
 
@@ -213,6 +237,13 @@ namespace Unity.UIWidgets.material {
                     tooltip: MaterialLocalizations.of(context).openAppDrawerTooltip);
             }
 
+            if (actions != null) {
+                actions = IconTheme.merge(
+                    data: actionsIconTheme,
+                    child: actions
+                );
+            }
+
             Widget toolbar = new NavigationToolbar(
                 leading: leading,
                 middle: title,
@@ -224,7 +255,7 @@ namespace Unity.UIWidgets.material {
                 child: new CustomSingleChildLayout(
                     layoutDelegate: new _ToolbarContainerLayout(),
                     child: IconTheme.merge(
-                        data: appBarIconTheme,
+                        data: overallIconTheme,
                         child: new DefaultTextStyle(
                             style: sideStyle,
                             child: toolbar)
@@ -273,7 +304,9 @@ namespace Unity.UIWidgets.material {
                 );
             }
 
-            Brightness brightness = this.widget.brightness ?? themeData.primaryColorBrightness;
+            Brightness brightness = this.widget.brightness
+                                    ?? appBarTheme.brightness
+                                    ?? themeData.primaryColorBrightness;
             SystemUiOverlayStyle overlayStyle = brightness == Brightness.dark
                 ? SystemUiOverlayStyle.light
                 : SystemUiOverlayStyle.dark;
@@ -281,8 +314,13 @@ namespace Unity.UIWidgets.material {
             return new AnnotatedRegion<SystemUiOverlayStyle>(
                 value: overlayStyle,
                 child: new Material(
-                    color: this.widget.backgroundColor ?? themeData.primaryColor,
-                    elevation: this.widget.elevation,
+                    color: this.widget.backgroundColor
+                           ?? appBarTheme.color
+                           ?? themeData.primaryColor,
+                    elevation: this.widget.elevation
+                               ?? appBarTheme.elevation
+                               ?? _defaultElevation,
+                    shape: this.widget.shape,
                     child: appBar
                 ));
         }
@@ -363,6 +401,7 @@ namespace Unity.UIWidgets.material {
             Color backgroundColor,
             Brightness? brightness,
             IconThemeData iconTheme,
+            IconThemeData actionsIconTheme,
             TextTheme textTheme,
             bool primary,
             bool? centerTitle,
@@ -386,6 +425,7 @@ namespace Unity.UIWidgets.material {
             this.backgroundColor = backgroundColor;
             this.brightness = brightness;
             this.iconTheme = iconTheme;
+            this.actionsIconTheme = actionsIconTheme;
             this.textTheme = textTheme;
             this.primary = primary;
             this.centerTitle = centerTitle;
@@ -410,6 +450,7 @@ namespace Unity.UIWidgets.material {
         public readonly Color backgroundColor;
         public readonly Brightness? brightness;
         public readonly IconThemeData iconTheme;
+        public readonly IconThemeData actionsIconTheme;
         public readonly TextTheme textTheme;
         public readonly bool primary;
         public readonly bool? centerTitle;
@@ -442,9 +483,9 @@ namespace Unity.UIWidgets.material {
 
         public override Widget build(BuildContext context, float shrinkOffset, bool overlapsContent) {
             float? visibleMainHeight = this.maxExtent - shrinkOffset - this.topPadding;
-            float toolbarOpacity = this.pinned && !this.floating
-                ? 1.0f
-                : ((visibleMainHeight - this._bottomHeight) / Constants.kToolbarHeight)?.clamp(0.0f, 1.0f) ?? 0.0f;
+            float toolbarOpacity = !this.pinned || (!this.floating && this.bottom != null)
+                ? ((visibleMainHeight - this._bottomHeight) / Constants.kToolbarHeight)?.clamp(0.0f, 1.0f) ?? 1.0f
+                : 1.0f;
             Widget appBar = FlexibleSpaceBar.createSettings(
                 minExtent: this.minExtent,
                 maxExtent: this.maxExtent,
@@ -490,6 +531,7 @@ namespace Unity.UIWidgets.material {
                    || this.backgroundColor != oldDelegate.backgroundColor
                    || this.brightness != oldDelegate.brightness
                    || this.iconTheme != oldDelegate.iconTheme
+                   || this.actionsIconTheme != oldDelegate.actionsIconTheme
                    || this.textTheme != oldDelegate.textTheme
                    || this.primary != oldDelegate.primary
                    || this.centerTitle != oldDelegate.centerTitle
@@ -521,6 +563,7 @@ namespace Unity.UIWidgets.material {
             Color backgroundColor = null,
             Brightness? brightness = null,
             IconThemeData iconTheme = null,
+            IconThemeData actionsIconTheme = null,
             TextTheme textTheme = null,
             bool primary = true,
             bool? centerTitle = null,
@@ -530,7 +573,7 @@ namespace Unity.UIWidgets.material {
             bool pinned = false,
             bool snap = false
         ) : base(key: key) {
-            D.assert(floating || !snap, "The 'snap' argument only makes sense for floating app bars.");
+            D.assert(floating || !snap, () => "The 'snap' argument only makes sense for floating app bars.");
             this.leading = leading;
             this.automaticallyImplyLeading = true;
             this.title = title;
@@ -542,6 +585,7 @@ namespace Unity.UIWidgets.material {
             this.backgroundColor = backgroundColor;
             this.brightness = brightness;
             this.iconTheme = iconTheme;
+            this.actionsIconTheme = actionsIconTheme;
             this.textTheme = textTheme;
             this.primary = primary;
             this.centerTitle = centerTitle;
@@ -574,6 +618,8 @@ namespace Unity.UIWidgets.material {
         public readonly Brightness? brightness;
 
         public readonly IconThemeData iconTheme;
+        
+        public readonly IconThemeData actionsIconTheme;
 
         public readonly TextTheme textTheme;
 
@@ -650,6 +696,7 @@ namespace Unity.UIWidgets.material {
                         backgroundColor: this.widget.backgroundColor,
                         brightness: this.widget.brightness,
                         iconTheme: this.widget.iconTheme,
+                        actionsIconTheme: this.widget.actionsIconTheme,
                         textTheme: this.widget.textTheme,
                         primary: this.widget.primary,
                         centerTitle: this.widget.centerTitle,

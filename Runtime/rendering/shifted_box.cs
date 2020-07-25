@@ -36,7 +36,7 @@ namespace Unity.UIWidgets.rendering {
             return 0.0f;
         }
 
-        protected override float computeMaxIntrinsicHeight(float width) {
+        protected internal override float computeMaxIntrinsicHeight(float width) {
             if (this.child != null) {
                 return this.child.getMaxIntrinsicHeight(width);
             }
@@ -135,7 +135,7 @@ namespace Unity.UIWidgets.rendering {
             return this._padding.vertical;
         }
 
-        protected override float computeMaxIntrinsicHeight(float width) {
+        protected internal override float computeMaxIntrinsicHeight(float width) {
             if (this.child != null) {
                 return this.child.getMaxIntrinsicHeight(Mathf.Max(0.0f, width - this._padding.horizontal)) +
                        this._padding.vertical;
@@ -566,7 +566,7 @@ namespace Unity.UIWidgets.rendering {
             return this._requestedSize.height;
         }
 
-        protected override float computeMaxIntrinsicHeight(float width) {
+        protected internal override float computeMaxIntrinsicHeight(float width) {
             return this._requestedSize.height;
         }
 
@@ -601,7 +601,7 @@ namespace Unity.UIWidgets.rendering {
         public float? widthFactor {
             get { return this._widthFactor; }
             set {
-                if (this._widthFactor != value) {
+                if (this._widthFactor == value) {
                     return;
                 }
 
@@ -615,7 +615,7 @@ namespace Unity.UIWidgets.rendering {
         public float? heightFactor {
             get { return this._heightFactor; }
             set {
-                if (this._heightFactor != value) {
+                if (this._heightFactor == value) {
                     return;
                 }
 
@@ -687,7 +687,7 @@ namespace Unity.UIWidgets.rendering {
             return result / (this._heightFactor ?? 1.0f);
         }
 
-        protected override float computeMaxIntrinsicHeight(float width) {
+        protected internal override float computeMaxIntrinsicHeight(float width) {
             float result;
             if (this.child == null) {
                 result = base.computeMaxIntrinsicHeight(width);
@@ -807,7 +807,7 @@ namespace Unity.UIWidgets.rendering {
             return 0.0f;
         }
 
-        protected override float computeMaxIntrinsicHeight(float width) {
+        protected internal override float computeMaxIntrinsicHeight(float width) {
             float height = this._getSize(BoxConstraints.tightForFinite(width: width)).height;
             if (height.isFinite()) {
                 return height;
@@ -842,7 +842,7 @@ namespace Unity.UIWidgets.rendering {
         public float baseline {
             get { return this._baseline; }
             set {
-                if (this._baseline != value) {
+                if (this._baseline == value) {
                     return;
                 }
 
@@ -857,7 +857,7 @@ namespace Unity.UIWidgets.rendering {
         public TextBaseline baselineType {
             get { return this._baselineType; }
             set {
-                if (this._baselineType != value) {
+                if (this._baselineType == value) {
                     return;
                 }
 

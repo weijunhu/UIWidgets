@@ -29,7 +29,7 @@ namespace Unity.UIWidgets.widgets {
 
         internal override bool _debugAssertTypeMatches(Type type) {
             D.assert(type == typeof(T),
-                "GestureRecognizerFactory of type " + typeof(T) + " was used where type $type was specified.");
+                () => "GestureRecognizerFactory of type " + typeof(T) + " was used where type $type was specified.");
             return true;
         }
     }
@@ -71,6 +71,10 @@ namespace Unity.UIWidgets.widgets {
             GestureTapCancelCallback onTapCancel = null,
             GestureDoubleTapCallback onDoubleTap = null,
             GestureLongPressCallback onLongPress = null,
+            GestureLongPressStartCallback onLongPressStart = null,
+            GestureLongPressMoveUpdateCallback onLongPressMoveUpdate = null,
+            GestureLongPressUpCallback onLongPressUp = null,
+            GestureLongPressEndCallback onLongPressEnd = null,
             GestureDragDownCallback onVerticalDragDown = null,
             GestureDragStartCallback onVerticalDragStart = null,
             GestureDragUpdateCallback onVerticalDragUpdate = null,
@@ -86,7 +90,12 @@ namespace Unity.UIWidgets.widgets {
             GestureDragUpdateCallback onPanUpdate = null,
             GestureDragEndCallback onPanEnd = null,
             GestureDragCancelCallback onPanCancel = null,
-            HitTestBehavior behavior = HitTestBehavior.deferToChild) : base(key) {
+            GestureScaleStartCallback onScaleStart = null,
+            GestureScaleUpdateCallback onScaleUpdate = null,
+            GestureScaleEndCallback onScaleEnd = null,
+            HitTestBehavior behavior = HitTestBehavior.deferToChild,
+            DragStartBehavior dragStartBehavior = DragStartBehavior.down
+        ) : base(key) {
             D.assert(() => {
                 bool haveVerticalDrag =
                     onVerticalDragStart != null || onVerticalDragUpdate != null ||
@@ -95,12 +104,21 @@ namespace Unity.UIWidgets.widgets {
                     onHorizontalDragStart != null || onHorizontalDragUpdate != null ||
                     onHorizontalDragEnd != null;
                 bool havePan = onPanStart != null || onPanUpdate != null || onPanEnd != null;
-                if (havePan) {
+                bool haveScale = onScaleStart != null || onScaleUpdate != null || onScaleEnd != null;
+                if (havePan || haveScale) {
+                    if (havePan && haveScale) {
+                        throw new UIWidgetsError(
+                            "Incorrect GestureDetector arguments.\n" +
+                            "Having both a pan gesture recognizer and a scale gesture recognizer is redundant; scale is a superset of pan. Just use the scale gesture recognizer."
+                        );
+                    }
+
+                    string recognizer = havePan ? "pan" : "scale";
                     if (haveVerticalDrag && haveHorizontalDrag) {
                         throw new UIWidgetsError(
                             "Incorrect GestureDetector arguments.\n" +
-                            "Simultaneously having a vertical drag gesture recognizer, a horizontal drag gesture recognizer, and a pan gesture recognizer " +
-                            "will result in the pan gesture recognizer being ignored, since the other two will catch all drags."
+                            $"Simultaneously having a vertical drag gesture recognizer, a horizontal drag gesture recognizer, and a {recognizer} gesture recognizer " +
+                            $"will result in the {recognizer} gesture recognizer being ignored, since the other two will catch all drags."
                         );
                     }
                 }
@@ -115,6 +133,10 @@ namespace Unity.UIWidgets.widgets {
             this.onTapCancel = onTapCancel;
             this.onDoubleTap = onDoubleTap;
             this.onLongPress = onLongPress;
+            this.onLongPressUp = onLongPressUp;
+            this.onLongPressStart = onLongPressStart;
+            this.onLongPressMoveUpdate = onLongPressMoveUpdate;
+            this.onLongPressEnd = onLongPressEnd;
             this.onVerticalDragDown = onVerticalDragDown;
             this.onVerticalDragStart = onVerticalDragStart;
             this.onVerticalDragUpdate = onVerticalDragUpdate;
@@ -130,7 +152,11 @@ namespace Unity.UIWidgets.widgets {
             this.onPanUpdate = onPanUpdate;
             this.onPanEnd = onPanEnd;
             this.onPanCancel = onPanCancel;
+            this.onScaleStart = onScaleStart;
+            this.onScaleUpdate = onScaleUpdate;
+            this.onScaleEnd = onScaleEnd;
             this.behavior = behavior;
+            this.dragStartBehavior = dragStartBehavior;
         }
 
         public readonly Widget child;
@@ -140,6 +166,10 @@ namespace Unity.UIWidgets.widgets {
         public readonly GestureTapCancelCallback onTapCancel;
         public readonly GestureDoubleTapCallback onDoubleTap;
         public readonly GestureLongPressCallback onLongPress;
+        public readonly GestureLongPressUpCallback onLongPressUp;
+        public readonly GestureLongPressStartCallback onLongPressStart;
+        public readonly GestureLongPressMoveUpdateCallback onLongPressMoveUpdate;
+        public readonly GestureLongPressEndCallback onLongPressEnd;
         public readonly GestureDragDownCallback onVerticalDragDown;
         public readonly GestureDragStartCallback onVerticalDragStart;
         public readonly GestureDragUpdateCallback onVerticalDragUpdate;
@@ -155,7 +185,11 @@ namespace Unity.UIWidgets.widgets {
         public readonly GestureDragUpdateCallback onPanUpdate;
         public readonly GestureDragEndCallback onPanEnd;
         public readonly GestureDragCancelCallback onPanCancel;
+        public readonly GestureScaleStartCallback onScaleStart;
+        public readonly GestureScaleUpdateCallback onScaleUpdate;
+        public readonly GestureScaleEndCallback onScaleEnd;
         public readonly HitTestBehavior behavior;
+        public readonly DragStartBehavior dragStartBehavior;
 
         public override Widget build(BuildContext context) {
             var gestures = new Dictionary<Type, GestureRecognizerFactory>();
@@ -184,11 +218,21 @@ namespace Unity.UIWidgets.widgets {
                     );
             }
 
-            if (this.onLongPress != null) {
+            if (this.onLongPress != null ||
+                this.onLongPressUp != null ||
+                this.onLongPressStart != null ||
+                this.onLongPressMoveUpdate != null ||
+                this.onLongPressEnd != null) {
                 gestures[typeof(LongPressGestureRecognizer)] =
                     new GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
                         () => new LongPressGestureRecognizer(debugOwner: this),
-                        instance => { instance.onLongPress = this.onLongPress; }
+                        instance => {
+                            instance.onLongPress = this.onLongPress;
+                            instance.onLongPressStart = this.onLongPressStart;
+                            instance.onLongPressMoveUpdate = this.onLongPressMoveUpdate;
+                            instance.onLongPressEnd = this.onLongPressEnd;
+                            instance.onLongPressUp = this.onLongPressUp;
+                        }
                     );
             }
 
@@ -206,6 +250,7 @@ namespace Unity.UIWidgets.widgets {
                             instance.onUpdate = this.onVerticalDragUpdate;
                             instance.onEnd = this.onVerticalDragEnd;
                             instance.onCancel = this.onVerticalDragCancel;
+                            instance.dragStartBehavior = this.dragStartBehavior;
                         }
                     );
             }
@@ -224,6 +269,7 @@ namespace Unity.UIWidgets.widgets {
                             instance.onUpdate = this.onHorizontalDragUpdate;
                             instance.onEnd = this.onHorizontalDragEnd;
                             instance.onCancel = this.onHorizontalDragCancel;
+                            instance.dragStartBehavior = this.dragStartBehavior;
                         }
                     );
             }
@@ -242,6 +288,21 @@ namespace Unity.UIWidgets.widgets {
                             instance.onUpdate = this.onPanUpdate;
                             instance.onEnd = this.onPanEnd;
                             instance.onCancel = this.onPanCancel;
+                            instance.dragStartBehavior = this.dragStartBehavior;
+                        }
+                    );
+            }
+
+            if (this.onScaleStart != null ||
+                this.onScaleUpdate != null ||
+                this.onScaleEnd != null) {
+                gestures[typeof(ScaleGestureRecognizer)] =
+                    new GestureRecognizerFactoryWithHandlers<ScaleGestureRecognizer>(
+                        () => new ScaleGestureRecognizer(debugOwner: this),
+                        instance => {
+                            instance.onStart = this.onScaleStart;
+                            instance.onUpdate = this.onScaleUpdate;
+                            instance.onEnd = this.onScaleEnd;
                         }
                     );
             }
@@ -251,6 +312,11 @@ namespace Unity.UIWidgets.widgets {
                 behavior: this.behavior,
                 child: this.child
             );
+        }
+
+        public override void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+            base.debugFillProperties(properties);
+            properties.add(new EnumProperty<DragStartBehavior>("startBehavior", this.dragStartBehavior));
         }
     }
 
@@ -329,9 +395,9 @@ namespace Unity.UIWidgets.widgets {
                     ? oldRecognizers[type]
                     : gestures[type].constructorRaw();
                 D.assert(this._recognizers[type].GetType() == type,
-                    "GestureRecognizerFactory of type " + type + " created a GestureRecognizer of type " +
-                    this._recognizers[type].GetType() +
-                    ". The GestureRecognizerFactory must be specialized with the type of the class that it returns from its constructor method.");
+                    () => "GestureRecognizerFactory of type " + type + " created a GestureRecognizer of type " +
+                          this._recognizers[type].GetType() +
+                          ". The GestureRecognizerFactory must be specialized with the type of the class that it returns from its constructor method.");
                 gestures[type].initializerRaw(this._recognizers[type]);
             }
 

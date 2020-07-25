@@ -5,6 +5,7 @@ using com.unity.uiwidgets.Runtime.rendering;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.painting;
 using Unity.UIWidgets.rendering;
+using Unity.UIWidgets.external;
 using Unity.UIWidgets.ui;
 
 namespace Unity.UIWidgets.widgets {
@@ -355,28 +356,26 @@ namespace Unity.UIWidgets.widgets {
             this._currentBeforeChild = null;
             D.assert(this._currentlyUpdatingChildIndex == null);
             try {
-                int firstIndex = 0;
-                int lastIndex = 0;
-
-                if (!this._childElements.isEmpty()) {
-                    firstIndex = this._childElements.First().Key;
-                    lastIndex = this._childElements.Last().Key;
-                    if (this._didUnderflow) {
-                        lastIndex += 1;
-                    }
-                }
-
-                for (int index = firstIndex; index <= lastIndex; ++index) {
+                void processElement(int index) {
                     this._currentlyUpdatingChildIndex = index;
                     Element newChild = this.updateChild(this._childElements.getOrDefault(index), this._build(index),
                         index);
                     if (newChild != null) {
                         this._childElements[index] = newChild;
-                        this._currentBeforeChild = (RenderBox) newChild.renderObject;
+                        var parentData = (SliverMultiBoxAdaptorParentData) newChild.renderObject.parentData;
+                        if (!parentData.keptAlive) {
+                            this._currentBeforeChild = (RenderBox) newChild.renderObject;
+                        }
                     }
                     else {
                         this._childElements.Remove(index);
                     }
+                }
+                // processElement may modify the Map - need to do a .toList() here.
+                this._childElements.Keys.ToList().ForEach(action: processElement);
+                if (this._didUnderflow) {
+                    var lastKey = this._childElements?.Last()?.Key ?? -1;
+                    processElement(lastKey + 1);
                 }
             }
             finally {
@@ -562,7 +561,9 @@ namespace Unity.UIWidgets.widgets {
 
         public override void visitChildren(ElementVisitor visitor) {
             D.assert(!this._childElements.Values.Any(child => child == null));
-            this._childElements.Values.ToList().ForEach(e => visitor(e));
+            foreach (var e in this._childElements.Values) {
+                visitor(e);
+            }
         }
 
         public override void debugVisitOnstageChildren(ElementVisitor visitor) {
@@ -583,6 +584,18 @@ namespace Unity.UIWidgets.widgets {
                        this.renderObject.constraints.remainingPaintExtent &&
                        parentData.layoutOffset + itemExtent > this.renderObject.constraints.scrollOffset;
             }).ToList().ForEach(e => visitor(e));
+        }
+    }
+
+    public class SliverFillRemaining : SingleChildRenderObjectWidget {
+        public SliverFillRemaining(
+            Key key = null,
+            Widget child = null
+        ) : base(key: key, child: child) {
+        }
+
+        public override RenderObject createRenderObject(BuildContext context) {
+            return new RenderSliverFillRemaining();
         }
     }
 

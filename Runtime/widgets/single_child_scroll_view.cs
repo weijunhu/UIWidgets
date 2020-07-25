@@ -5,7 +5,6 @@ using Unity.UIWidgets.gestures;
 using Unity.UIWidgets.painting;
 using Unity.UIWidgets.rendering;
 using Unity.UIWidgets.ui;
-using Unity.UIWidgets.utils;
 using UnityEngine;
 using Rect = Unity.UIWidgets.ui.Rect;
 
@@ -19,10 +18,11 @@ namespace Unity.UIWidgets.widgets {
             bool? primary = null,
             ScrollPhysics physics = null,
             ScrollController controller = null,
-            Widget child = null
+            Widget child = null,
+            DragStartBehavior dragStartBehavior = DragStartBehavior.start
         ) : base(key: key) {
             D.assert(!(controller != null && primary == true),
-                "Primary ScrollViews obtain their ScrollController via inheritance from a PrimaryScrollController widget. " +
+                () => "Primary ScrollViews obtain their ScrollController via inheritance from a PrimaryScrollController widget. " +
                 "You cannot both set primary to true and pass an explicit controller.");
             this.scrollDirection = scrollDirection;
             this.reverse = reverse;
@@ -31,6 +31,7 @@ namespace Unity.UIWidgets.widgets {
             this.physics = physics;
             this.controller = controller;
             this.child = child;
+            this.dragStartBehavior = dragStartBehavior;
         }
 
         public readonly Axis scrollDirection;
@@ -47,6 +48,7 @@ namespace Unity.UIWidgets.widgets {
 
         public readonly Widget child;
 
+        public readonly DragStartBehavior dragStartBehavior;
 
         AxisDirection _getDirection(BuildContext context) {
             return AxisDirectionUtils.getAxisDirectionFromAxisReverseAndDirectionality(context, this.scrollDirection,
@@ -67,6 +69,7 @@ namespace Unity.UIWidgets.widgets {
                 : this.controller;
 
             Scrollable scrollable = new Scrollable(
+                dragStartBehavior: this.dragStartBehavior,
                 axisDirection: axisDirection,
                 controller: scrollController,
                 physics: this.physics,
@@ -293,7 +296,7 @@ namespace Unity.UIWidgets.widgets {
             return 0.0f;
         }
 
-        protected override float computeMaxIntrinsicHeight(float width) {
+        protected internal override float computeMaxIntrinsicHeight(float width) {
             if (this.child != null) {
                 return this.child.getMaxIntrinsicHeight(width);
             }

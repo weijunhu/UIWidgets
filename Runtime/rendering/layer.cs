@@ -1,4 +1,6 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.painting;
 using Unity.UIWidgets.ui;
@@ -103,6 +105,8 @@ namespace Unity.UIWidgets.rendering {
             D.assert(!this.attached);
         }
 
+        internal abstract S find<S>(Offset regionOffset) where S : class;
+
         internal abstract flow.Layer addToScene(SceneBuilder builder, Offset layerOffset = null);
 
         internal void _addToSceneWithRetainedRendering(SceneBuilder builder) {
@@ -172,6 +176,10 @@ namespace Unity.UIWidgets.rendering {
             }
         }
 
+        internal override S find<S>(Offset regionOffset) {
+            return null;
+        }
+
         internal override flow.Layer addToScene(SceneBuilder builder, Offset layerOffset = null) {
             layerOffset = layerOffset ?? Offset.zero;
 
@@ -206,6 +214,10 @@ namespace Unity.UIWidgets.rendering {
 
         public readonly bool freeze;
 
+        internal override S find<S>(Offset regionOffset) {
+            return null;
+        }
+
         internal override flow.Layer addToScene(SceneBuilder builder, Offset layerOffset = null) {
             layerOffset = layerOffset ?? Offset.zero;
 
@@ -232,6 +244,20 @@ namespace Unity.UIWidgets.rendering {
             get { return this._lastChild; }
         }
 
+        internal override S find<S>(Offset regionOffset) {
+            Layer current = this.lastChild;
+            while (current != null) {
+                S value = current.find<S>(regionOffset);
+                if (value != null) {
+                    return value;
+                }
+
+                current = current.previousSibling;
+            }
+
+            return null;
+        }
+
         internal Layer _lastChild;
 
         bool _debugUltimatePreviousSiblingOf(Layer child, Layer equals = null) {
@@ -254,6 +280,95 @@ namespace Unity.UIWidgets.rendering {
             }
 
             return child == equals;
+        }
+
+        PictureLayer _highlightConflictingLayer(PhysicalModelLayer child) {
+            PictureRecorder recorder = new PictureRecorder();
+            var canvas = new RecorderCanvas(recorder);
+            canvas.drawPath(child.clipPath, new Paint() {
+                color = new Color(0xFFAA0000),
+                style = PaintingStyle.stroke,
+                strokeWidth = child.elevation + 10.0f,
+            });
+            PictureLayer pictureLayer = new PictureLayer(child.clipPath.getBounds());
+            pictureLayer.picture = recorder.endRecording();
+            pictureLayer.debugCreator = child;
+            child.append(pictureLayer);
+            return pictureLayer;
+        }
+
+        List<PictureLayer> _processConflictingPhysicalLayers(PhysicalModelLayer predecessor, PhysicalModelLayer child) {
+            UIWidgetsError.reportError(new UIWidgetsErrorDetails(
+                exception: new UIWidgetsError("Painting order is out of order with respect to elevation.\n" +
+                                              "See https://api.flutter.dev/flutter/rendering/debugCheckElevations.html " +
+                                              "for more details."),
+                context: "during compositing",
+                informationCollector: (StringBuilder builder) => {
+                    builder.AppendLine("Attempted to composite layer");
+                    builder.AppendLine(child.ToString());
+                    builder.AppendLine("after layer");
+                    builder.AppendLine(predecessor.ToString());
+                    builder.AppendLine("which occupies the same area at a higher elevation.");
+                }
+            ));
+            return new List<PictureLayer> {
+                this._highlightConflictingLayer(predecessor),
+                this._highlightConflictingLayer(child)
+            };
+        }
+
+        protected List<PictureLayer> _debugCheckElevations() {
+            List<PhysicalModelLayer> physicalModelLayers =
+                this.depthFirstIterateChildren().OfType<PhysicalModelLayer>().ToList();
+            List<PictureLayer> addedLayers = new List<PictureLayer>();
+
+            for (int i = 0; i < physicalModelLayers.Count; i++) {
+                PhysicalModelLayer physicalModelLayer = physicalModelLayers[i];
+                D.assert(physicalModelLayer.lastChild?.debugCreator != physicalModelLayer,
+                    () => "debugCheckElevations has either already visited this layer or failed to remove the" +
+                          " added picture from it.");
+                float accumulatedElevation = physicalModelLayer.elevation;
+                Layer ancestor = physicalModelLayer.parent;
+                while (ancestor != null) {
+                    if (ancestor is PhysicalModelLayer modelLayer) {
+                        accumulatedElevation += modelLayer.elevation;
+                    }
+
+                    ancestor = ancestor.parent;
+                }
+
+                for (int j = 0; j <= i; j++) {
+                    PhysicalModelLayer predecessor = physicalModelLayers[j];
+                    float predecessorAccumulatedElevation = predecessor.elevation;
+                    ancestor = predecessor.parent;
+                    while (ancestor != null) {
+                        if (ancestor == predecessor) {
+                            continue;
+                        }
+
+                        if (ancestor is PhysicalModelLayer modelLayer) {
+                            predecessorAccumulatedElevation += modelLayer.elevation;
+                        }
+
+                        ancestor = ancestor.parent;
+                    }
+
+                    if (predecessorAccumulatedElevation <= accumulatedElevation) {
+                        continue;
+                    }
+
+                    Path intersection = Path.combine(
+                        PathOperation.intersect,
+                        predecessor._debugTransformedClipPath,
+                        physicalModelLayer._debugTransformedClipPath);
+
+                    if (intersection != null && intersection.computeMetrics().Any((metric) => metric.length > 0)) {
+                        addedLayers.AddRange(this._processConflictingPhysicalLayers(predecessor, physicalModelLayer));
+                    }
+                }
+            }
+
+            return addedLayers;
         }
 
         internal override void updateSubtreeNeedsAddToScene() {
@@ -393,6 +508,25 @@ namespace Unity.UIWidgets.rendering {
             D.assert(transform != null);
         }
 
+        public List<Layer> depthFirstIterateChildren() {
+            if (this.firstChild == null) {
+                return new List<Layer>();
+            }
+
+            List<Layer> children = new List<Layer>();
+            Layer child = this.firstChild;
+            while (child != null) {
+                children.Add(child);
+                if (child is ContainerLayer containerLayer) {
+                    children.AddRange(containerLayer.depthFirstIterateChildren());
+                }
+
+                child = child.nextSibling;
+            }
+
+            return children;
+        }
+
         public override List<DiagnosticsNode> debugDescribeChildren() {
             var children = new List<DiagnosticsNode>();
             if (this.firstChild == null) {
@@ -433,6 +567,10 @@ namespace Unity.UIWidgets.rendering {
             }
         }
 
+        internal override S find<S>(Offset regionOffset) {
+            return base.find<S>(regionOffset - this.offset);
+        }
+
         public override void applyTransform(Layer child, Matrix3 transform) {
             D.assert(child != null);
             D.assert(transform != null);
@@ -440,9 +578,27 @@ namespace Unity.UIWidgets.rendering {
         }
 
         public Scene buildScene(SceneBuilder builder) {
+            List<PictureLayer> temporaryLayers = null;
+            D.assert(() => {
+                if (RenderingDebugUtils.debugCheckElevationsEnabled) {
+                    temporaryLayers = this._debugCheckElevations();
+                }
+
+                return true;
+            });
             this.updateSubtreeNeedsAddToScene();
             this.addToScene(builder);
-            return builder.build();
+            Scene scene = builder.build();
+            D.assert(() => {
+                if (temporaryLayers != null) {
+                    foreach (PictureLayer temporaryLayer in temporaryLayers) {
+                        temporaryLayer.remove();
+                    }
+                }
+
+                return true;
+            });
+            return scene;
         }
 
         internal override flow.Layer addToScene(SceneBuilder builder, Offset layerOffset = null) {
@@ -496,6 +652,14 @@ namespace Unity.UIWidgets.rendering {
                     this.markNeedsAddToScene();
                 }
             }
+        }
+
+        internal override S find<S>(Offset regionOffset) {
+            if (!this.clipRect.contains(regionOffset)) {
+                return null;
+            }
+
+            return base.find<S>(regionOffset);
         }
 
         internal override flow.Layer addToScene(SceneBuilder builder, Offset layerOffset = null) {
@@ -562,6 +726,14 @@ namespace Unity.UIWidgets.rendering {
             }
         }
 
+        internal override S find<S>(Offset regionOffset) {
+            if (!this.clipRRect.contains(regionOffset)) {
+                return null;
+            }
+
+            return base.find<S>(regionOffset);
+        }
+
         internal override flow.Layer addToScene(SceneBuilder builder, Offset layerOffset = null) {
             layerOffset = layerOffset ?? Offset.zero;
 
@@ -626,6 +798,14 @@ namespace Unity.UIWidgets.rendering {
             }
         }
 
+        internal override S find<S>(Offset regionOffset) {
+            if (!this.clipPath.contains(regionOffset)) {
+                return null;
+            }
+
+            return base.find<S>(regionOffset);
+        }
+
         internal override flow.Layer addToScene(SceneBuilder builder, Offset layerOffset = null) {
             layerOffset = layerOffset ?? Offset.zero;
 
@@ -656,11 +836,31 @@ namespace Unity.UIWidgets.rendering {
 
         public Matrix3 transform {
             get { return this._transform; }
-            set { this._transform = value; }
+            set {
+                this._transform = value;
+                this._inverseDirty = true;
+            }
         }
 
         Matrix3 _transform;
         Matrix3 _lastEffectiveTransform;
+
+        readonly Matrix3 _invertedTransform = Matrix3.I();
+        bool _inverseDirty = true;
+
+        internal override S find<S>(Offset regionOffset) {
+            if (this._inverseDirty) {
+                this.transform.invert(this._invertedTransform);
+                this._inverseDirty = false;
+            }
+
+            if (this._invertedTransform == null) {
+                return null;
+            }
+
+            Offset transform = this._invertedTransform.mapXY(regionOffset.dx, regionOffset.dy);
+            return base.find<S>(transform);
+        }
 
         internal override flow.Layer addToScene(SceneBuilder builder, Offset layerOffset = null) {
             layerOffset = layerOffset ?? Offset.zero;
@@ -682,7 +882,13 @@ namespace Unity.UIWidgets.rendering {
         public override void applyTransform(Layer child, Matrix3 transform) {
             D.assert(child != null);
             D.assert(transform != null);
-            transform.preConcat(this._lastEffectiveTransform);
+            D.assert(this._lastEffectiveTransform != null || this.transform != null);
+            if (this._lastEffectiveTransform == null) {
+                transform.preConcat(this.transform);
+            }
+            else {
+                transform.preConcat(this._lastEffectiveTransform);
+            }
         }
 
         public override void debugFillProperties(DiagnosticPropertiesBuilder properties) {
@@ -748,7 +954,7 @@ namespace Unity.UIWidgets.rendering {
             properties.add(new DiagnosticsProperty<Offset>("offset", this.offset));
         }
     }
-    
+
     public class BackdropFilterLayer : ContainerLayer {
         public BackdropFilterLayer(ImageFilter filter = null) {
             D.assert(filter != null);
@@ -819,6 +1025,10 @@ namespace Unity.UIWidgets.rendering {
 
         internal Offset _lastOffset;
 
+        internal override S find<S>(Offset regionOffset) {
+            return base.find<S>(regionOffset - this.offset);
+        }
+
         internal override flow.Layer addToScene(SceneBuilder builder, Offset layerOffset = null) {
             layerOffset = layerOffset ?? Offset.zero;
 
@@ -872,6 +1082,27 @@ namespace Unity.UIWidgets.rendering {
         Offset _lastOffset;
         Matrix3 _lastTransform;
 
+        readonly Matrix3 _invertedTransform = Matrix3.I();
+        bool _inverseDirty = true;
+
+        internal override S find<S>(Offset regionOffset) {
+            if (this.link.leader == null) {
+                return this.showWhenUnlinked ? base.find<S>(regionOffset - this.unlinkedOffset) : null;
+            }
+
+            if (this._inverseDirty) {
+                this.getLastTransform().invert(this._invertedTransform);
+                this._inverseDirty = false;
+            }
+
+            if (this._invertedTransform == null) {
+                return null;
+            }
+
+            Offset transform = this._invertedTransform.mapXY(regionOffset.dx, regionOffset.dy);
+            return base.find<S>(transform - this.linkedOffset);
+        }
+
         public Matrix3 getLastTransform() {
             if (this._lastTransform == null) {
                 return null;
@@ -899,9 +1130,9 @@ namespace Unity.UIWidgets.rendering {
             }
 
             D.assert(this.link.leader.owner == this.owner,
-                "Linked LeaderLayer anchor is not in the same layer tree as the FollowerLayer.");
+                () => "Linked LeaderLayer anchor is not in the same layer tree as the FollowerLayer.");
             D.assert(this.link.leader._lastOffset != null,
-                "LeaderLayer anchor must come before FollowerLayer in paint order, but the reverse was true.");
+                () => "LeaderLayer anchor must come before FollowerLayer in paint order, but the reverse was true.");
 
             HashSet<Layer> ancestors = new HashSet<Layer>();
             Layer ancestor = this.parent;
@@ -938,11 +1169,13 @@ namespace Unity.UIWidgets.rendering {
             inverseTransform.preConcat(forwardTransform);
             inverseTransform.preTranslate(this.linkedOffset.dx, this.linkedOffset.dy);
             this._lastTransform = inverseTransform;
+            this._inverseDirty = true;
         }
 
         protected override bool alwaysNeedsAddToScene {
             get { return true; }
         }
+
 
         internal override flow.Layer addToScene(SceneBuilder builder, Offset layerOffset = null) {
             layerOffset = layerOffset ?? Offset.zero;
@@ -951,6 +1184,7 @@ namespace Unity.UIWidgets.rendering {
             if (this.link.leader == null && !this.showWhenUnlinked) {
                 this._lastTransform = null;
                 this._lastOffset = null;
+                this._inverseDirty = true;
                 return null;
             }
 
@@ -969,6 +1203,7 @@ namespace Unity.UIWidgets.rendering {
                 builder.pop();
             }
 
+            this._inverseDirty = true;
             return null;
         }
 
@@ -1016,6 +1251,10 @@ namespace Unity.UIWidgets.rendering {
 
         public readonly int optionsMask;
 
+        internal override S find<S>(Offset regionOffset) {
+            return null;
+        }
+
         internal override flow.Layer addToScene(SceneBuilder builder, Offset layerOffset = null) {
             layerOffset = layerOffset ?? Offset.zero;
 
@@ -1028,20 +1267,44 @@ namespace Unity.UIWidgets.rendering {
         where T : class {
         public AnnotatedRegionLayer(
             T value = null,
-            Size size = null) {
+            Size size = null,
+            Offset offset = null) {
+            offset = offset ?? Offset.zero;
             D.assert(value != null);
             this.value = value;
             this.size = size;
+            this.offset = offset;
         }
 
         public readonly T value;
 
         public readonly Size size;
 
+        public readonly Offset offset;
+
+        internal override S find<S>(Offset regionOffset) {
+            S result = base.find<S>(regionOffset);
+            if (result != null) {
+                return result;
+            }
+
+            if (this.size != null && !(this.offset & this.size).contains(regionOffset)) {
+                return null;
+            }
+
+            if (typeof(T) == typeof(S)) {
+                S typedResult = this.value as S;
+                return typedResult;
+            }
+
+            return base.find<S>(regionOffset);
+        }
+
         public override void debugFillProperties(DiagnosticPropertiesBuilder properties) {
             base.debugFillProperties(properties);
             properties.add(new DiagnosticsProperty<T>("value", this.value));
             properties.add(new DiagnosticsProperty<Size>("size", this.size, defaultValue: null));
+            properties.add(new DiagnosticsProperty<Offset>("offset", this.offset, defaultValue: null));
         }
     }
 
@@ -1086,6 +1349,20 @@ namespace Unity.UIWidgets.rendering {
             }
         }
 
+        internal Path _debugTransformedClipPath {
+            get {
+                ContainerLayer ancestor = this.parent;
+                Matrix3 matrix = Matrix3.I();
+                while (ancestor != null && ancestor.parent != null) {
+                    ancestor.applyTransform(this, matrix);
+                    ancestor = ancestor.parent;
+                }
+
+                return this.clipPath.transform(matrix);
+            }
+        }
+
+
         Clip _clipBehavior;
 
         public float elevation {
@@ -1123,6 +1400,14 @@ namespace Unity.UIWidgets.rendering {
         }
 
         Color _shadowColor;
+
+        internal override S find<S>(Offset regionOffset) {
+            if (!this.clipPath.contains(regionOffset)) {
+                return null;
+            }
+
+            return base.find<S>(regionOffset);
+        }
 
         internal override flow.Layer addToScene(SceneBuilder builder, Offset layerOffset = null) {
             layerOffset = layerOffset ?? Offset.zero;

@@ -4,12 +4,15 @@ using RSG;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.rendering;
 using Unity.UIWidgets.ui;
+using UnityEngine;
 
 namespace Unity.UIWidgets.widgets {
     public interface WidgetsBindingObserver {
         void didChangeMetrics();
 
         void didChangeTextScaleFactor();
+
+        void didChangePlatformBrightness();
 
         void didChangeLocales(List<Locale> locale);
 
@@ -24,13 +27,15 @@ namespace Unity.UIWidgets.widgets {
             set { RendererBinding.instance = value; }
         }
 
-        public WidgetsBinding() {
+        public WidgetsBinding(bool inEditorWindow = false) : base(inEditorWindow) {
             this.buildOwner.onBuildScheduled = this._handleBuildScheduled;
             Window.instance.onLocaleChanged += this.handleLocaleChanged;
             this.widgetInspectorService = new WidgetInspectorService(this);
             this.addPersistentFrameCallback((duration) => {
                 TextBlobMesh.tickNextFrame();
                 TessellationGenerator.tickNextFrame();
+                uiTessellationGenerator.tickNextFrame();
+                uiPathCacheManager.tickNextFrame();
             });
         }
 
@@ -54,6 +59,23 @@ namespace Unity.UIWidgets.widgets {
             return this._observers.Remove(observer);
         }
 
+        public void handlePopRoute() {
+            var idx = -1;
+            
+            void _handlePopRouteSub(bool result) {
+                if (!result) {
+                    idx++;
+                    if (idx >= this._observers.Count) {
+                        Application.Quit();
+                        return;
+                    }
+                    this._observers[idx].didPopRoute().Then((Action<bool>) _handlePopRouteSub);
+                }
+            }
+            
+            _handlePopRouteSub(false);
+        }
+
         public readonly WidgetInspectorService widgetInspectorService;
 
         protected override void handleMetricsChanged() {
@@ -67,6 +89,13 @@ namespace Unity.UIWidgets.widgets {
             base.handleTextScaleFactorChanged();
             foreach (WidgetsBindingObserver observer in this._observers) {
                 observer.didChangeTextScaleFactor();
+            }
+        }
+        
+        protected override void handlePlatformBrightnessChanged() {
+            base.handlePlatformBrightnessChanged();
+            foreach (WidgetsBindingObserver observer in this._observers) {
+                observer.didChangePlatformBrightness();
             }
         }
 
@@ -143,6 +172,8 @@ namespace Unity.UIWidgets.widgets {
                 return;
             }
             
+            //The former widget tree must be layout first before its destruction
+            this.drawFrame();
             this.attachRootWidget(null);
             this.buildOwner.buildScope(this._renderViewElement);
             this.buildOwner.finalizeTree();

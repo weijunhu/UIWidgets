@@ -1,11 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.UIWidgets.InternalBridge;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
 namespace Unity.UIWidgets.foundation {
     public delegate void ValueChanged<T>(T value);
+
+    public delegate void ValueSetter<T>(T value);
+
+    public delegate T ValueGetter<T>();
 
     public delegate IEnumerable<T> EnumerableFilter<T>(IEnumerable<T> input);
 
@@ -71,6 +76,15 @@ namespace Unity.UIWidgets.foundation {
             it.TryGetValue(key, out v);
             return v;
         }
+        
+        public static TValue getOrDefault<TKey, TValue>(this IDictionary<TKey, TValue> it, TKey key, TValue defaultVal) {
+            TValue v = defaultVal;
+            if (key == null) {
+                return v;
+            }
+            it.TryGetValue(key, out v);
+            return v;
+        }
 
         public static T first<T>(this IList<T> it) {
             return it[0];
@@ -131,6 +145,28 @@ namespace Unity.UIWidgets.foundation {
                 return null;
             }
             return "{ " + string.Join(", ", it.Select(item => item.ToString())) + " }";
+        }
+
+        public static void reset<T>(this List<T> list, int size) {
+            NoAllocHelpersBridge<T>.EnsureListElemCount(list, size);
+        }
+
+        public static ref T refAt<T>(this List<T> list, int index) {
+            var array = NoAllocHelpersBridge<T>.ExtractArrayFromListT(list);
+            return ref array[index];
+        }
+        
+        public static T[] array<T>(this List<T> list) {
+            return NoAllocHelpersBridge<T>.ExtractArrayFromListT(list);
+        }
+
+        public static List<T> CreateRepeatedList<T>(T value, int length) {
+            List<T> newList = new List<T>(length);
+            for (int i = 0; i < length; i++) {
+                newList.Add(value);
+            }
+
+            return newList;
         }
     }
 }

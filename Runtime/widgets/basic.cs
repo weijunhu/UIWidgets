@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using UIWidgets.Runtime.rendering;
 using Unity.UIWidgets.foundation;
+using Unity.UIWidgets.gestures;
 using Unity.UIWidgets.painting;
 using Unity.UIWidgets.rendering;
 using Unity.UIWidgets.ui;
-using Unity.UIWidgets.utils;
 using UnityEngine;
 using Color = Unity.UIWidgets.ui.Color;
 using Rect = Unity.UIWidgets.ui.Rect;
@@ -194,6 +194,41 @@ namespace Unity.UIWidgets.widgets {
         }
     }
 
+    public class ClipOval : SingleChildRenderObjectWidget {
+        public ClipOval(
+            Key key = null,
+            CustomClipper<Rect> clipper = null,
+            Clip clipBehavior = Clip.antiAlias,
+            Widget child = null) : base(key: key, child: child
+        ) {
+            this.clipper = clipper;
+            this.clipBehavior = clipBehavior;
+        }
+
+        public readonly CustomClipper<Rect> clipper;
+
+        public readonly Clip clipBehavior;
+
+        public override RenderObject createRenderObject(BuildContext context) {
+            return new RenderClipOval(clipper: this.clipper, clipBehavior: this.clipBehavior);
+        }
+
+        public override void updateRenderObject(BuildContext context, RenderObject _renderObject) {
+            RenderClipOval renderObject = _renderObject as RenderClipOval;
+            renderObject.clipper = this.clipper;
+        }
+
+        public override void didUnmountRenderObject(RenderObject _renderObject) {
+            RenderClipOval renderObject = _renderObject as RenderClipOval;
+            renderObject.clipper = null;
+        }
+
+        public override void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+            base.debugFillProperties(properties);
+            properties.add(new DiagnosticsProperty<CustomClipper<Rect>>("clipper", this.clipper, defaultValue: null));
+        }
+    }
+
     public class ClipPath : SingleChildRenderObjectWidget {
         public ClipPath(
             Key key = null,
@@ -203,6 +238,27 @@ namespace Unity.UIWidgets.widgets {
         ) : base(key: key, child: child) {
             this.clipper = clipper;
             this.clipBehavior = clipBehavior;
+        }
+
+        public static Widget shape(
+            Key key = null,
+            ShapeBorder shape = null,
+            Clip clipBehavior = Clip.antiAlias,
+            Widget child = null
+        ) {
+            D.assert(shape != null);
+            return new Builder(
+                key: key,
+                builder: (BuildContext context) => {
+                    return new ClipPath(
+                        clipper: new ShapeBorderClipper(
+                            shape: shape
+                        ),
+                        clipBehavior: clipBehavior,
+                        child: child
+                    );
+                }
+            );
         }
 
         public readonly CustomClipper<Path> clipper;
@@ -463,7 +519,51 @@ namespace Unity.UIWidgets.widgets {
         public override void debugFillProperties(DiagnosticPropertiesBuilder properties) {
             base.debugFillProperties(properties);
             properties.add(new DiagnosticsProperty<Alignment>("alignment", this.alignment));
-            properties.add(new DiagnosticsProperty<Axis>("constrainedAxis", null));
+            properties.add(new EnumProperty<Axis?>("constrainedAxis", null));
+        }
+    }
+
+    public class FractionallySizedBox : SingleChildRenderObjectWidget {
+        public FractionallySizedBox(
+            Key key = null,
+            Alignment alignment = null,
+            float? widthFactor = null,
+            float? heightFactor = null,
+            Widget child = null
+        ) : base(key: key, child: child) {
+            D.assert(widthFactor == null || widthFactor >= 0.0f);
+            D.assert(heightFactor == null || heightFactor >= 0.0f);
+            this.alignment = alignment ?? Alignment.center;
+            this.widthFactor = widthFactor;
+            this.heightFactor = heightFactor;
+        }
+
+        public readonly float? widthFactor;
+
+        public readonly float? heightFactor;
+
+        public readonly Alignment alignment;
+
+        public override RenderObject createRenderObject(BuildContext context) {
+            return new RenderFractionallySizedOverflowBox(
+                alignment: this.alignment,
+                widthFactor: this.widthFactor,
+                heightFactor: this.heightFactor
+            );
+        }
+
+        public override void updateRenderObject(BuildContext context, RenderObject _renderObject) {
+            RenderFractionallySizedOverflowBox renderObject = _renderObject as RenderFractionallySizedOverflowBox;
+            renderObject.alignment = this.alignment;
+            renderObject.widthFactor = this.widthFactor;
+            renderObject.heightFactor = this.heightFactor;
+        }
+
+        public override void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+            base.debugFillProperties(properties);
+            properties.add(new DiagnosticsProperty<Alignment>("alignment", this.alignment));
+            properties.add(new FloatProperty("widthFactor", this.widthFactor, defaultValue: null));
+            properties.add(new FloatProperty("heightFactor", this.heightFactor, defaultValue: null));
         }
     }
 
@@ -630,6 +730,8 @@ namespace Unity.UIWidgets.widgets {
     public class IntrinsicWidth : SingleChildRenderObjectWidget {
         public IntrinsicWidth(Key key = null, float? stepWidth = null, float? stepHeight = null, Widget child = null)
             : base(key: key, child: child) {
+            D.assert(stepWidth == null || stepWidth >= 0.0f);
+            D.assert(stepHeight == null || stepHeight >= 0.0f);
             this.stepWidth = stepWidth;
             this.stepHeight = stepHeight;
         }
@@ -638,14 +740,22 @@ namespace Unity.UIWidgets.widgets {
 
         public readonly float? stepHeight;
 
+        float? _stepWidth {
+            get { return this.stepWidth == 0.0f ? null : this.stepWidth; }
+        }
+
+        float? _stepHeight {
+            get { return this.stepHeight == 0.0f ? null : this.stepHeight; }
+        }
+
         public override RenderObject createRenderObject(BuildContext context) {
-            return new RenderIntrinsicWidth(stepWidth: this.stepWidth, stepHeight: this.stepHeight);
+            return new RenderIntrinsicWidth(stepWidth: this._stepWidth, stepHeight: this._stepHeight);
         }
 
         public override void updateRenderObject(BuildContext context, RenderObject renderObjectRaw) {
             var renderObject = (RenderIntrinsicWidth) renderObjectRaw;
-            renderObject.stepWidth = this.stepWidth;
-            renderObject.stepHeight = this.stepHeight;
+            renderObject.stepWidth = this._stepWidth;
+            renderObject.stepHeight = this._stepHeight;
         }
     }
 
@@ -1095,6 +1205,7 @@ namespace Unity.UIWidgets.widgets {
             Color shadowColor = null,
             Widget child = null) : base(key: key, child: child) {
             D.assert(color != null);
+            D.assert(elevation >= 0.0f);
 
             this.shape = shape;
             this.clipBehavior = clipBehavior;
@@ -1158,6 +1269,7 @@ namespace Unity.UIWidgets.widgets {
             Widget child = null) : base(key: key, child: child) {
             D.assert(clipper != null);
             D.assert(color != null);
+            D.assert(elevation >= 0.0f);
             this.clipper = clipper;
             this.clipBehavior = clipBehavior;
             this.elevation = elevation;
@@ -1198,6 +1310,28 @@ namespace Unity.UIWidgets.widgets {
             properties.add(new FloatProperty("elevation", this.elevation));
             properties.add(new DiagnosticsProperty<Color>("color", this.color));
             properties.add(new DiagnosticsProperty<Color>("shadowColor", this.shadowColor));
+        }
+    }
+
+    public class RotatedBox : SingleChildRenderObjectWidget {
+        public RotatedBox(
+            Key key = null,
+            int? quarterTurns = null,
+            Widget child = null
+        ) : base(key: key, child: child) {
+            D.assert(quarterTurns != null);
+            this.quarterTurns = quarterTurns;
+        }
+
+
+        public readonly int? quarterTurns;
+
+        public override RenderObject createRenderObject(BuildContext context) {
+            return new RenderRotatedBox(this.quarterTurns ?? 0);
+        }
+
+        public override void updateRenderObject(BuildContext context, RenderObject renderObject) {
+            (renderObject as RenderRotatedBox).quarterTurns = this.quarterTurns ?? 0;
         }
     }
 
@@ -1644,7 +1778,10 @@ namespace Unity.UIWidgets.widgets {
             bool softWrap = true,
             TextOverflow overflow = TextOverflow.clip,
             float textScaleFactor = 1.0f,
-            int? maxLines = null
+            int? maxLines = null,
+            Action onSelectionChanged = null,
+            Color selectionColor = null,
+            StrutStyle strutStyle = null
         ) : base(key: key) {
             D.assert(text != null);
             D.assert(maxLines == null || maxLines > 0);
@@ -1655,6 +1792,9 @@ namespace Unity.UIWidgets.widgets {
             this.overflow = overflow;
             this.textScaleFactor = textScaleFactor;
             this.maxLines = maxLines;
+            this.onSelectionChanged = onSelectionChanged;
+            this.selectionColor = selectionColor;
+            this.strutStyle = strutStyle;
         }
 
         public readonly TextSpan text;
@@ -1663,6 +1803,9 @@ namespace Unity.UIWidgets.widgets {
         public readonly TextOverflow overflow;
         public readonly float textScaleFactor;
         public readonly int? maxLines;
+        public readonly Action onSelectionChanged;
+        public readonly Color selectionColor;
+        public readonly StrutStyle strutStyle;
 
         public override RenderObject createRenderObject(BuildContext context) {
             return new RenderParagraph(
@@ -1671,7 +1814,9 @@ namespace Unity.UIWidgets.widgets {
                 softWrap: this.softWrap,
                 overflow: this.overflow,
                 textScaleFactor: this.textScaleFactor,
-                maxLines: this.maxLines
+                maxLines: this.maxLines,
+                onSelectionChanged: this.onSelectionChanged,
+                selectionColor: this.selectionColor
             );
         }
 
@@ -1683,6 +1828,9 @@ namespace Unity.UIWidgets.widgets {
             renderObject.overflow = this.overflow;
             renderObject.textScaleFactor = this.textScaleFactor;
             renderObject.maxLines = this.maxLines;
+            renderObject.onSelectionChanged = this.onSelectionChanged;
+            renderObject.selectionColor = this.selectionColor;
+            renderObject.strutStyle = this.strutStyle;
         }
 
         public override void debugFillProperties(DiagnosticPropertiesBuilder properties) {
@@ -1711,7 +1859,7 @@ namespace Unity.UIWidgets.widgets {
             ImageRepeat repeat = ImageRepeat.noRepeat,
             Rect centerSlice = null,
             bool invertColors = false,
-            FilterMode filterMode = FilterMode.Point
+            FilterMode filterMode = FilterMode.Bilinear
         ) : base(key) {
             this.image = image;
             this.width = width;
@@ -1824,12 +1972,17 @@ namespace Unity.UIWidgets.widgets {
             Key key = null,
             PointerDownEventListener onPointerDown = null,
             PointerMoveEventListener onPointerMove = null,
+            PointerEnterEventListener onPointerEnter = null,
+            PointerExitEventListener onPointerExit = null,
+            PointerHoverEventListener onPointerHover = null,
             PointerUpEventListener onPointerUp = null,
             PointerCancelEventListener onPointerCancel = null,
-            PointerHoverEventListener onPointerHover = null,
-            PointerLeaveEventListener onPointerLeave = null,
-            PointerEnterEventListener onPointerEnter = null,
+            PointerSignalEventListener onPointerSignal = null,
             PointerScrollEventListener onPointerScroll = null,
+            PointerDragFromEditorEnterEventListener onPointerDragFromEditorEnter = null,
+            PointerDragFromEditorHoverEventListener onPointerDragFromEditorHover = null,
+            PointerDragFromEditorExitEventListener onPointerDragFromEditorExit = null,
+            PointerDragFromEditorReleaseEventListener onPointerDragFromEditorRelease = null,
             HitTestBehavior behavior = HitTestBehavior.deferToChild,
             Widget child = null
         ) : base(key: key, child: child) {
@@ -1837,11 +1990,17 @@ namespace Unity.UIWidgets.widgets {
             this.onPointerMove = onPointerMove;
             this.onPointerUp = onPointerUp;
             this.onPointerCancel = onPointerCancel;
+            this.onPointerSignal = onPointerSignal;
             this.onPointerHover = onPointerHover;
-            this.onPointerLeave = onPointerLeave;
+            this.onPointerExit = onPointerExit;
             this.onPointerEnter = onPointerEnter;
             this.onPointerScroll = onPointerScroll;
             this.behavior = behavior;
+
+            this.onPointerDragFromEditorEnter = onPointerDragFromEditorEnter;
+            this.onPointerDragFromEditorHover = onPointerDragFromEditorHover;
+            this.onPointerDragFromEditorExit = onPointerDragFromEditorExit;
+            this.onPointerDragFromEditorRelease = onPointerDragFromEditorRelease;
         }
 
         public readonly PointerDownEventListener onPointerDown;
@@ -1852,15 +2011,25 @@ namespace Unity.UIWidgets.widgets {
 
         public readonly PointerCancelEventListener onPointerCancel;
 
+        public readonly PointerSignalEventListener onPointerSignal;
+
         public readonly PointerHoverEventListener onPointerHover;
 
         public readonly PointerEnterEventListener onPointerEnter;
 
-        public readonly PointerLeaveEventListener onPointerLeave;
+        public readonly PointerExitEventListener onPointerExit;
 
         public readonly PointerScrollEventListener onPointerScroll;
 
         public readonly HitTestBehavior behavior;
+
+        public readonly PointerDragFromEditorEnterEventListener onPointerDragFromEditorEnter;
+        
+        public readonly PointerDragFromEditorHoverEventListener onPointerDragFromEditorHover;
+        
+        public readonly PointerDragFromEditorExitEventListener onPointerDragFromEditorExit;
+        
+        public readonly PointerDragFromEditorReleaseEventListener onPointerDragFromEditorRelease;
 
         public override RenderObject createRenderObject(BuildContext context) {
             return new RenderPointerListener(
@@ -1868,10 +2037,15 @@ namespace Unity.UIWidgets.widgets {
                 onPointerMove: this.onPointerMove,
                 onPointerUp: this.onPointerUp,
                 onPointerCancel: this.onPointerCancel,
+                onPointerSignal: this.onPointerSignal,
                 onPointerEnter: this.onPointerEnter,
-                onPointerLeave: this.onPointerLeave,
+                onPointerExit: this.onPointerExit,
                 onPointerHover: this.onPointerHover,
                 onPointerScroll: this.onPointerScroll,
+                onPointerDragFromEditorEnter: this.onPointerDragFromEditorEnter,
+                onPointerDragFromEditorHover: this.onPointerDragFromEditorHover,
+                onPointerDragFromEditorExit: this.onPointerDragFromEditorExit,
+                onPointerDragFromEditorRelease: this.onPointerDragFromEditorRelease,
                 behavior: this.behavior
             );
         }
@@ -1882,11 +2056,19 @@ namespace Unity.UIWidgets.widgets {
             renderObject.onPointerMove = this.onPointerMove;
             renderObject.onPointerUp = this.onPointerUp;
             renderObject.onPointerCancel = this.onPointerCancel;
+            renderObject.onPointerSignal = this.onPointerSignal;
             renderObject.onPointerEnter = this.onPointerEnter;
             renderObject.onPointerHover = this.onPointerHover;
-            renderObject.onPointerLeave = this.onPointerLeave;
+            renderObject.onPointerExit = this.onPointerExit;
             renderObject.onPointerScroll = this.onPointerScroll;
             renderObject.behavior = this.behavior;
+
+#if UNITY_EDITOR
+            renderObject.onPointerDragFromEditorEnter = this.onPointerDragFromEditorEnter;
+            renderObject.onPointerDragFromEditorHover = this.onPointerDragFromEditorHover;
+            renderObject.onPointerDragFromEditorExit = this.onPointerDragFromEditorExit;
+            renderObject.onPointerDragFromEditorRelease = this.onPointerDragFromEditorRelease;
+#endif
         }
 
         public override void debugFillProperties(DiagnosticPropertiesBuilder properties) {
@@ -1908,6 +2090,10 @@ namespace Unity.UIWidgets.widgets {
                 listeners.Add("cancel");
             }
 
+            if (this.onPointerSignal != null) {
+                listeners.Add("signal");
+            }
+
             if (this.onPointerEnter != null) {
                 listeners.Add("enter");
             }
@@ -1916,13 +2102,31 @@ namespace Unity.UIWidgets.widgets {
                 listeners.Add("hover");
             }
 
-            if (this.onPointerLeave != null) {
-                listeners.Add("leave");
+            if (this.onPointerExit != null) {
+                listeners.Add("exit");
             }
 
             if (this.onPointerScroll != null) {
                 listeners.Add("scroll");
             }
+
+#if UNITY_EDITOR
+            if (this.onPointerDragFromEditorEnter != null) {
+                listeners.Add("dragFromEditorEnter");
+            }
+
+            if (this.onPointerDragFromEditorHover != null) {
+                listeners.Add("dragFromEditorHover");
+            }
+
+            if (this.onPointerDragFromEditorExit != null) {
+                listeners.Add("dragFromEditorExit");
+            }
+
+            if (this.onPointerDragFromEditorRelease != null) {
+                listeners.Add("dragFromEditorRelease");
+            }
+#endif
 
             properties.add(new EnumerableProperty<string>("listeners", listeners, ifEmpty: "<none>"));
             properties.add(new EnumProperty<HitTestBehavior>("behavior", this.behavior));
@@ -1940,7 +2144,7 @@ namespace Unity.UIWidgets.widgets {
         }
 
         public static List<RepaintBoundary> wrapAll(List<Widget> widgets) {
-            List<RepaintBoundary> result = Enumerable.Repeat((RepaintBoundary) null, widgets.Count).ToList();
+            List<RepaintBoundary> result = CollectionUtils.CreateRepeatedList<RepaintBoundary>(null, widgets.Count);
             for (int i = 0; i < result.Count; ++i) {
                 result[i] = wrap(widgets[i], i);
             }

@@ -13,26 +13,43 @@ namespace Unity.UIWidgets.painting {
 
         public readonly TextStyle style;
         public readonly string text;
+        public List<string> splitedText;
         public readonly List<TextSpan> children;
         public readonly GestureRecognizer recognizer;
+        public readonly HoverRecognizer hoverRecognizer;
 
-        public TextSpan(string text = "", TextStyle style = null, List<TextSpan> children = null, 
-            GestureRecognizer recognizer = null) {
+        public TextSpan(string text = "", TextStyle style = null, List<TextSpan> children = null,
+            GestureRecognizer recognizer = null, HoverRecognizer hoverRecognizer = null) {
             this.text = text;
+            this.splitedText = !string.IsNullOrEmpty(text) ? EmojiUtils.splitByEmoji(text) : null;
             this.style = style;
             this.children = children;
             this.recognizer = recognizer;
+            this.hoverRecognizer = hoverRecognizer;
         }
 
         public void build(ParagraphBuilder builder, float textScaleFactor = 1.0f) {
             var hasStyle = this.style != null;
+
             if (hasStyle) {
                 builder.pushStyle(this.style, textScaleFactor);
             }
 
-            if (!string.IsNullOrEmpty(this.text)) {
-                builder.addText(this.text);
+            if (this.splitedText != null) {
+                if (this.splitedText.Count == 1 && !char.IsHighSurrogate(this.splitedText[0][0]) &&
+                    !EmojiUtils.isSingleCharEmoji(this.splitedText[0][0])) {
+                    builder.addText(this.splitedText[0]);
+                }
+                else {
+                    TextStyle style = this.style ?? new TextStyle();
+                    for (int i = 0; i < this.splitedText.Count; i++) {
+                        builder.pushStyle(style, textScaleFactor);
+                        builder.addText(this.splitedText[i]);
+                        builder.pop();
+                    }
+                }
             }
+
 
             if (this.children != null) {
                 foreach (var child in this.children) {
@@ -43,6 +60,21 @@ namespace Unity.UIWidgets.painting {
 
             if (hasStyle) {
                 builder.pop();
+            }
+        }
+
+        public bool hasHoverRecognizer {
+            get {
+                bool need = false;
+                this.visitTextSpan((text) => {
+                    if (text.hoverRecognizer != null) {
+                        need = true;
+                        return false;
+                    }
+
+                    return true;
+                });
+                return need;
             }
         }
 
@@ -84,7 +116,7 @@ namespace Unity.UIWidgets.painting {
             });
             return result;
         }
-        
+
         public string toPlainText() {
             var sb = new StringBuilder();
             this.visitTextSpan((span) => {
@@ -118,22 +150,25 @@ namespace Unity.UIWidgets.painting {
                 if (!this.visitTextSpan(span => {
                     if (span.children != null) {
                         foreach (TextSpan child in span.children) {
-                            if (child == null)
+                            if (child == null) {
                                 return false;
+                            }
                         }
                     }
+
                     return true;
                 })) {
                     throw new UIWidgetsError(
                         "A TextSpan object with a non-null child list should not have any nulls in its child list.\n" +
-                                "The full text in question was:\n" +
-                                this.toStringDeep(prefixLineOne:"  "));
+                        "The full text in question was:\n" +
+                        this.toStringDeep(prefixLineOne: "  "));
                 }
+
                 return true;
             });
             return true;
         }
-        
+
         public RenderComparison compareTo(TextSpan other) {
             if (this.Equals(other)) {
                 return RenderComparison.identical;
@@ -150,6 +185,11 @@ namespace Unity.UIWidgets.painting {
             RenderComparison result = Equals(this.recognizer, other.recognizer)
                 ? RenderComparison.identical
                 : RenderComparison.metadata;
+
+            if (!Equals(this.hoverRecognizer, other.hoverRecognizer)) {
+                result = RenderComparison.function > result ? RenderComparison.function : result;
+            }
+
             if (this.style != null) {
                 var candidate = this.style.compareTo(other.style);
                 if (candidate > result) {

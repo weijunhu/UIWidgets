@@ -15,6 +15,8 @@ namespace Unity.UIWidgets.widgets {
 
     public delegate Locale LocaleResolutionCallback(Locale locale, List<Locale> supportedLocales);
 
+    public delegate string GenerateAppTitle(BuildContext context);
+
     public delegate PageRoute PageRouteFactory(RouteSettings settings, WidgetBuilder builder);
 
     public class WidgetsApp : StatefulWidget {
@@ -37,6 +39,11 @@ namespace Unity.UIWidgets.widgets {
         public readonly LocaleResolutionCallback localeResolutionCallback;
         public readonly List<Locale> supportedLocales;
 
+        public readonly string title;
+        public readonly GenerateAppTitle onGenerateTitle;
+        public readonly Color color;
+        public readonly InspectorSelectButtonBuilder inspectorSelectButtonBuilder;
+
         public WidgetsApp(
             Key key = null,
             GlobalKey<NavigatorState> navigatorKey = null,
@@ -54,7 +61,11 @@ namespace Unity.UIWidgets.widgets {
             LocaleListResolutionCallback localeListResolutionCallback = null,
             LocaleResolutionCallback localeResolutionCallback = null,
             List<Locale> supportedLocales = null,
-            bool showPerformanceOverlay = false
+            bool showPerformanceOverlay = false,
+            GenerateAppTitle onGenerateTitle = null,
+            string title = "",
+            Color color = null,
+            InspectorSelectButtonBuilder inspectorSelectButtonBuilder = null
         ) : base(key) {
             routes = routes ?? new Dictionary<string, WidgetBuilder>();
             supportedLocales = supportedLocales ?? new List<Locale> {new Locale("en", "US")};
@@ -76,11 +87,16 @@ namespace Unity.UIWidgets.widgets {
             this.supportedLocales = supportedLocales;
             this.showPerformanceOverlay = showPerformanceOverlay;
 
+            this.onGenerateTitle = onGenerateTitle;
+            this.title = title;
+            this.color = color;
+            this.inspectorSelectButtonBuilder = inspectorSelectButtonBuilder;
+
             D.assert(
                 home == null ||
                 !this.routes.ContainsKey(Navigator.defaultRouteName),
-                "If the home property is specified, the routes table " +
-                "cannot include an entry for \" / \", since it would be redundant."
+                () => "If the home property is specified, the routes table " +
+                      "cannot include an entry for \" / \", since it would be redundant."
             );
 
             D.assert(
@@ -89,22 +105,22 @@ namespace Unity.UIWidgets.widgets {
                 this.routes.ContainsKey(Navigator.defaultRouteName) ||
                 onGenerateRoute != null ||
                 onUnknownRoute != null,
-                "Either the home property must be specified, " +
-                "or the routes table must include an entry for \"/\", " +
-                "or there must be on onGenerateRoute callback specified, " +
-                "or there must be an onUnknownRoute callback specified, " +
-                "or the builder property must be specified, " +
-                "because otherwise there is nothing to fall back on if the " +
-                "app is started with an intent that specifies an unknown route."
+                () => "Either the home property must be specified, " +
+                      "or the routes table must include an entry for \"/\", " +
+                      "or there must be on onGenerateRoute callback specified, " +
+                      "or there must be an onUnknownRoute callback specified, " +
+                      "or the builder property must be specified, " +
+                      "because otherwise there is nothing to fall back on if the " +
+                      "app is started with an intent that specifies an unknown route."
             );
 
             D.assert(
                 builder != null ||
                 onGenerateRoute != null ||
                 pageRouteBuilder != null,
-                "If neither builder nor onGenerateRoute are provided, the " +
-                "pageRouteBuilder must be specified so that the default handler " +
-                "will know what kind of PageRoute transition to build."
+                () => "If neither builder nor onGenerateRoute are provided, the " +
+                      "pageRouteBuilder must be specified so that the default handler " +
+                      "will know what kind of PageRoute transition to build."
             );
         }
 
@@ -130,7 +146,7 @@ namespace Unity.UIWidgets.widgets {
 
             return provider.window;
         }
-        
+
         public static Window of(GameObject gameObject) {
             var panel = gameObject.GetComponent<UIWidgetsPanel>();
             return panel == null ? null : panel.window;
@@ -180,6 +196,10 @@ namespace Unity.UIWidgets.widgets {
             this.setState();
         }
 
+        public void didChangePlatformBrightness() {
+            this.setState(() => { });
+        }
+
         public void didChangeLocales(List<Locale> locale) {
             Locale newLocale = this._resolveLocales(locale, this.widget.supportedLocales);
             if (newLocale != this._locale) {
@@ -202,7 +222,7 @@ namespace Unity.UIWidgets.widgets {
         public override void initState() {
             base.initState();
             this._updateNavigator();
-            
+
             //todo: xingwei.zhu: change the default locale to ui.Window.locale
             this._locale =
                 this._resolveLocales(new List<Locale> {new Locale("en", "US")}, this.widget.supportedLocales);
@@ -244,14 +264,14 @@ namespace Unity.UIWidgets.widgets {
 
             if (pageContentBuilder != null) {
                 D.assert(this.widget.pageRouteBuilder != null,
-                    "The default onGenerateRoute handler for WidgetsApp must have a " +
-                    "pageRouteBuilder set if the home or routes properties are set.");
+                    () => "The default onGenerateRoute handler for WidgetsApp must have a " +
+                          "pageRouteBuilder set if the home or routes properties are set.");
                 var route = this.widget.pageRouteBuilder(
                     settings,
                     pageContentBuilder
                 );
                 D.assert(route != null,
-                    "The pageRouteBuilder for WidgetsApp must return a valid non-null Route.");
+                    () => "The pageRouteBuilder for WidgetsApp must return a valid non-null Route.");
                 return route;
             }
 

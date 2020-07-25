@@ -125,7 +125,7 @@ namespace Unity.UIWidgets.rendering {
             return height;
         }
 
-        protected override float computeMaxIntrinsicHeight(float width) {
+        protected internal override float computeMaxIntrinsicHeight(float width) {
             if (this._additionalConstraints.hasBoundedHeight && this._additionalConstraints.hasTightHeight) {
                 return this._additionalConstraints.minHeight;
             }
@@ -300,7 +300,7 @@ namespace Unity.UIWidgets.rendering {
             return 0.0f;
         }
 
-        protected override float computeMaxIntrinsicHeight(float width) {
+        protected internal override float computeMaxIntrinsicHeight(float width) {
             if (width.isFinite()) {
                 return width / this._aspectRatio;
             }
@@ -363,6 +363,8 @@ namespace Unity.UIWidgets.rendering {
             float? stepHeight = null,
             RenderBox child = null
         ) : base(child) {
+            D.assert(stepWidth == null || stepWidth > 0.0f);
+            D.assert(stepHeight == null || stepHeight > 0.0f);
             this._stepWidth = stepWidth;
             this._stepHeight = stepHeight;
         }
@@ -372,6 +374,7 @@ namespace Unity.UIWidgets.rendering {
         public float? stepWidth {
             get { return this._stepWidth; }
             set {
+                D.assert(value == null || value > 0.0f);
                 if (value == this._stepWidth) {
                     return;
                 }
@@ -386,6 +389,7 @@ namespace Unity.UIWidgets.rendering {
         public float? stepHeight {
             get { return this._stepHeight; }
             set {
+                D.assert(value == null || value > 0.0f);
                 if (value == this._stepHeight) {
                     return;
                 }
@@ -431,7 +435,7 @@ namespace Unity.UIWidgets.rendering {
             return _applyStep(height, this._stepHeight);
         }
 
-        protected override float computeMaxIntrinsicHeight(float width) {
+        protected internal override float computeMaxIntrinsicHeight(float width) {
             if (this.child == null) {
                 return 0.0f;
             }
@@ -979,6 +983,69 @@ namespace Unity.UIWidgets.rendering {
         }
     }
 
+    public class RenderClipOval : _RenderCustomClip<Rect> {
+        public RenderClipOval(
+            RenderBox child = null,
+            CustomClipper<Rect> clipper = null,
+            Clip clipBehavior = Clip.antiAlias
+        ) : base(child: child, clipper: clipper, clipBehavior: clipBehavior) {
+            D.assert(clipBehavior != Clip.none);
+        }
+
+        Rect _cachedRect;
+        Path _cachedPath;
+
+        Path _getClipPath(Rect rect) {
+            if (rect != this._cachedRect) {
+                this._cachedRect = rect;
+                this._cachedPath = new Path();
+                this._cachedPath.addOval(this._cachedRect);
+            }
+
+            return this._cachedPath;
+        }
+
+        protected override Rect _defaultClip {
+            get { return Offset.zero & this.size; }
+        }
+
+        public override bool hitTest(HitTestResult result,
+            Offset position = null
+        ) {
+            this._updateClip();
+            D.assert(this._clip != null);
+            Offset center = this._clip.center;
+            Offset offset = new Offset((position.dx - center.dx) / this._clip.width,
+                (position.dy - center.dy) / this._clip.height);
+            if (offset.distanceSquared > 0.25f) {
+                return false;
+            }
+
+            return base.hitTest(result, position: position);
+        }
+
+        public override void paint(PaintingContext context, Offset offset) {
+            if (this.child != null) {
+                this._updateClip();
+                context.pushClipPath(this.needsCompositing, offset, this._clip, this._getClipPath(this._clip),
+                    base.paint, clipBehavior: this.clipBehavior);
+            }
+        }
+
+        protected override void debugPaintSize(PaintingContext context, Offset offset) {
+            D.assert(() => {
+                if (this.child != null) {
+                    base.debugPaintSize(context, offset);
+                    context.canvas.drawPath(this._getClipPath(this._clip).shift(offset), this._debugPaint);
+                    this._debugText.paint(context.canvas,
+                        offset + new Offset((this._clip.width - this._debugText.width) / 2.0f,
+                            -this._debugText.text.style.fontSize * 1.1f ?? 0.0f));
+                }
+
+                return true;
+            });
+        }
+    }
 
     public class RenderClipPath : _RenderCustomClip<Path> {
         public RenderClipPath(
@@ -1017,7 +1084,6 @@ namespace Unity.UIWidgets.rendering {
                 this._updateClip();
                 context.pushClipPath(this.needsCompositing, offset, Offset.zero & this.size,
                     this._clip, base.paint, clipBehavior: this.clipBehavior);
-                base.paint(context, offset);
             }
         }
 
@@ -1045,7 +1111,7 @@ namespace Unity.UIWidgets.rendering {
             Clip clipBehavior = Clip.none,
             CustomClipper<T> clipper = null
         ) : base(child: child, clipBehavior: clipBehavior, clipper: clipper) {
-            D.assert(elevation != null);
+            D.assert(elevation != null && elevation >= 0.0f);
             D.assert(color != null);
             D.assert(shadowColor != null);
             this._elevation = elevation ?? 0.0f;
@@ -1056,6 +1122,7 @@ namespace Unity.UIWidgets.rendering {
         public float elevation {
             get { return this._elevation; }
             set {
+                D.assert(value >= 0.0f);
                 if (this.elevation == value) {
                     return;
                 }
@@ -1102,12 +1169,8 @@ namespace Unity.UIWidgets.rendering {
 
         Color _color;
 
-        protected static Paint _transparentPaint {
-            get { return new Paint {color = new Color(0x00000000)}; }
-        }
-
         protected override bool alwaysNeedsCompositing {
-            get { return this._elevation != 0.0; }
+            get { return true; }
         }
 
         public override void debugFillProperties(DiagnosticPropertiesBuilder description) {
@@ -1124,12 +1187,13 @@ namespace Unity.UIWidgets.rendering {
             BoxShape shape = BoxShape.rectangle,
             Clip clipBehavior = Clip.none,
             BorderRadius borderRadius = null,
-            float elevation = 0.0f,
+            float? elevation = 0.0f,
             Color color = null,
             Color shadowColor = null
         ) : base(clipBehavior: clipBehavior, child: child, elevation: elevation, color: color,
             shadowColor: shadowColor ?? new Color(0xFF000000)) {
             D.assert(color != null);
+            D.assert(elevation != null && elevation >= 0.0f);
             this._shape = shape;
             this._borderRadius = borderRadius;
         }
@@ -1189,7 +1253,7 @@ namespace Unity.UIWidgets.rendering {
             return base.hitTest(result, position: position);
         }
 
-        
+
         public override void paint(PaintingContext context, Offset offset) {
             if (this.child != null) {
                 this._updateClip();
@@ -1198,36 +1262,17 @@ namespace Unity.UIWidgets.rendering {
                 Path offsetRRectAsPath = new Path();
                 offsetRRectAsPath.addRRect(offsetRRect);
 
-                if (this.needsCompositing) {
-                    PhysicalModelLayer physicalModel = new PhysicalModelLayer(
-                        clipPath: offsetRRectAsPath,
-                        clipBehavior: this.clipBehavior,
-                        elevation: this.elevation,
-                        color: this.color,
-                        shadowColor: this.shadowColor);
-                    context.pushLayer(physicalModel, base.paint, offset, childPaintBounds: offsetBounds);
-                }
-                else {
-                    Canvas canvas = context.canvas;
-                    if (this.elevation != 0.0) {
-                        canvas.drawRect(
-                            offsetBounds.inflate(20.0f),
-                            _transparentPaint
-                        );
-                        canvas.drawShadow(
-                            offsetRRectAsPath,
-                            this.shadowColor,
-                            this.elevation,
-                            this.color.alpha != 0xFF
-                        );
-                    }
-
-                    Paint paint = new Paint {color = this.color};
-                    canvas.drawRRect(offsetRRect, paint);
-                    context.clipRRectAndPaint(offsetRRect, this.clipBehavior, offsetBounds,
-                        () => base.paint(context, offset));
-                    D.assert(context.canvas == canvas, "canvas changed even though needsCompositing was false");
-                }
+                PhysicalModelLayer physicalModel = new PhysicalModelLayer(
+                    clipPath: offsetRRectAsPath,
+                    clipBehavior: this.clipBehavior,
+                    elevation: this.elevation,
+                    color: this.color,
+                    shadowColor: this.shadowColor);
+                D.assert(() => {
+                    physicalModel.debugCreator = this.debugCreator;
+                    return true;
+                });
+                context.pushLayer(physicalModel, base.paint, offset, childPaintBounds: offsetBounds);
             }
         }
 
@@ -1277,7 +1322,7 @@ namespace Unity.UIWidgets.rendering {
             return base.hitTest(result, position: position);
         }
 
-        
+
         public override void paint(PaintingContext context, Offset offset) {
             if (this.child != null) {
                 this._updateClip();
@@ -1285,36 +1330,13 @@ namespace Unity.UIWidgets.rendering {
                 Path offsetPath = new Path();
                 offsetPath.addPath(this._clip, offset);
 
-                if (this.needsCompositing) {
-                    PhysicalModelLayer physicalModel = new PhysicalModelLayer(
-                        clipPath: offsetPath,
-                        clipBehavior: this.clipBehavior,
-                        elevation: this.elevation,
-                        color: this.color,
-                        shadowColor: this.shadowColor);
-                    context.pushLayer(physicalModel, base.paint, offset, childPaintBounds: offsetBounds);
-                }
-                else {
-                    Canvas canvas = context.canvas;
-                if (this.elevation != 0.0) {
-                    canvas.drawRect(
-                        offsetBounds.inflate(20.0f),
-                        _transparentPaint
-                    );
-                    
-                    canvas.drawShadow(
-                        offsetPath,
-                        this.shadowColor,
-                        this.elevation,
-                        this.color.alpha != 0xFF
-                    );
-                }
-                    Paint paint = new Paint {color = this.color, style = PaintingStyle.fill};
-                    canvas.drawPath(offsetPath, paint);
-                    context.clipPathAndPaint(offsetPath, this.clipBehavior,
-                        offsetBounds, () => base.paint(context, offset));
-                    D.assert(context.canvas == canvas, "canvas changed even though needsCompositing was false");
-                }
+                PhysicalModelLayer physicalModel = new PhysicalModelLayer(
+                    clipPath: offsetPath,
+                    clipBehavior: this.clipBehavior,
+                    elevation: this.elevation,
+                    color: this.color,
+                    shadowColor: this.shadowColor);
+                context.pushLayer(physicalModel, base.paint, offset, childPaintBounds: offsetBounds);
             }
         }
 
@@ -1857,11 +1879,7 @@ namespace Unity.UIWidgets.rendering {
 
     public delegate void PointerCancelEventListener(PointerCancelEvent evt);
 
-    public delegate void PointerHoverEventListener(PointerHoverEvent evt);
-
-    public delegate void PointerEnterEventListener(PointerEnterEvent evt);
-
-    public delegate void PointerLeaveEventListener(PointerLeaveEvent evt);
+    public delegate void PointerSignalEventListener(PointerSignalEvent evt);
 
     public delegate void PointerScrollEventListener(PointerScrollEvent evt);
 
@@ -1869,12 +1887,17 @@ namespace Unity.UIWidgets.rendering {
         public RenderPointerListener(
             PointerDownEventListener onPointerDown = null,
             PointerMoveEventListener onPointerMove = null,
+            PointerEnterEventListener onPointerEnter = null,
+            PointerHoverEventListener onPointerHover = null,
+            PointerExitEventListener onPointerExit = null,
             PointerUpEventListener onPointerUp = null,
             PointerCancelEventListener onPointerCancel = null,
-            PointerHoverEventListener onPointerHover = null,
-            PointerLeaveEventListener onPointerLeave = null,
-            PointerEnterEventListener onPointerEnter = null,
+            PointerSignalEventListener onPointerSignal = null,
             PointerScrollEventListener onPointerScroll = null,
+            PointerDragFromEditorEnterEventListener onPointerDragFromEditorEnter = null,
+            PointerDragFromEditorHoverEventListener onPointerDragFromEditorHover = null,
+            PointerDragFromEditorExitEventListener onPointerDragFromEditorExit = null,
+            PointerDragFromEditorReleaseEventListener onPointerDragFromEditorRelease = null,
             HitTestBehavior behavior = HitTestBehavior.deferToChild,
             RenderBox child = null
         ) : base(behavior: behavior, child: child) {
@@ -1882,11 +1905,121 @@ namespace Unity.UIWidgets.rendering {
             this.onPointerMove = onPointerMove;
             this.onPointerUp = onPointerUp;
             this.onPointerCancel = onPointerCancel;
-            this.onPointerHover = onPointerHover;
-            this.onPointerLeave = onPointerLeave;
-            this.onPointerEnter = onPointerEnter;
+            this.onPointerSignal = onPointerSignal;
             this.onPointerScroll = onPointerScroll;
+
+            this._onPointerEnter = onPointerEnter;
+            this._onPointerHover = onPointerHover;
+            this._onPointerExit = onPointerExit;
+
+            this._onPointerDragFromEditorEnter = onPointerDragFromEditorEnter;
+            this._onPointerDragFromEditorHover = onPointerDragFromEditorHover;
+            this._onPointerDragFromEditorExit = onPointerDragFromEditorExit;
+            this._onPointerDragFromEditorRelease = onPointerDragFromEditorRelease;
+
+            if (this._onPointerEnter != null ||
+                this._onPointerHover != null ||
+                this._onPointerExit != null ||
+                this._onPointerDragFromEditorEnter != null ||
+                this._onPointerDragFromEditorHover != null ||
+                this._onPointerDragFromEditorExit != null ||
+                this._onPointerDragFromEditorRelease != null
+            ) {
+                this._hoverAnnotation = new MouseTrackerAnnotation(
+                    onEnter: this._onPointerEnter,
+                    onHover: this._onPointerHover,
+                    onExit: this._onPointerExit,
+                    onDragFromEditorEnter: this._onPointerDragFromEditorEnter,
+                    onDragFromEditorHover: this._onPointerDragFromEditorHover,
+                    onDragFromEditorExit: this._onPointerDragFromEditorExit,
+                    onDragFromEditorRelease: this._onPointerDragFromEditorRelease
+                );
+            }
         }
+
+        PointerDragFromEditorEnterEventListener _onPointerDragFromEditorEnter;
+
+        public PointerDragFromEditorEnterEventListener onPointerDragFromEditorEnter {
+            get { return this._onPointerDragFromEditorEnter; }
+            set {
+                if (this._onPointerDragFromEditorEnter != value) {
+                    this._onPointerDragFromEditorEnter = value;
+                    this._updateAnnotations();
+                }
+            }
+        }
+
+        PointerDragFromEditorExitEventListener _onPointerDragFromEditorExit;
+
+        public PointerDragFromEditorExitEventListener onPointerDragFromEditorExit {
+            get { return this._onPointerDragFromEditorExit; }
+            set {
+                if (this._onPointerDragFromEditorExit != value) {
+                    this._onPointerDragFromEditorExit = value;
+                    this._updateAnnotations();
+                }
+            }
+        }
+
+        PointerDragFromEditorHoverEventListener _onPointerDragFromEditorHover;
+
+        public PointerDragFromEditorHoverEventListener onPointerDragFromEditorHover {
+            get { return this._onPointerDragFromEditorHover; }
+            set {
+                if (this._onPointerDragFromEditorHover != value) {
+                    this._onPointerDragFromEditorHover = value;
+                    this._updateAnnotations();
+                }
+            }
+        }
+
+        PointerDragFromEditorReleaseEventListener _onPointerDragFromEditorRelease;
+
+        public PointerDragFromEditorReleaseEventListener onPointerDragFromEditorRelease {
+            get { return this._onPointerDragFromEditorRelease; }
+            set {
+                if (this._onPointerDragFromEditorRelease != value) {
+                    this._onPointerDragFromEditorRelease = value;
+                    this._updateAnnotations();
+                }
+            }
+        }
+
+        public PointerEnterEventListener onPointerEnter {
+            get { return this._onPointerEnter; }
+            set {
+                if (this._onPointerEnter != value) {
+                    this._onPointerEnter = value;
+                    this._updateAnnotations();
+                }
+            }
+        }
+
+        PointerEnterEventListener _onPointerEnter;
+
+        public PointerHoverEventListener onPointerHover {
+            get { return this._onPointerHover; }
+            set {
+                if (this._onPointerHover != value) {
+                    this._onPointerHover = value;
+                    this._updateAnnotations();
+                }
+            }
+        }
+
+        PointerHoverEventListener _onPointerHover;
+
+        public PointerExitEventListener onPointerExit {
+            get { return this._onPointerExit; }
+            set {
+                if (this._onPointerExit != value) {
+                    this._onPointerExit = value;
+                    this._updateAnnotations();
+                }
+            }
+        }
+
+        PointerExitEventListener _onPointerExit;
 
         public PointerDownEventListener onPointerDown;
 
@@ -1896,13 +2029,90 @@ namespace Unity.UIWidgets.rendering {
 
         public PointerCancelEventListener onPointerCancel;
 
-        public PointerHoverEventListener onPointerHover;
-
-        public PointerLeaveEventListener onPointerLeave;
-
-        public PointerEnterEventListener onPointerEnter;
+        public PointerSignalEventListener onPointerSignal;
 
         public PointerScrollEventListener onPointerScroll;
+
+        MouseTrackerAnnotation _hoverAnnotation;
+
+        public MouseTrackerAnnotation hoverAnnotation {
+            get { return this._hoverAnnotation; }
+        }
+
+        void _updateAnnotations() {
+            D.assert(this._onPointerEnter != this._hoverAnnotation.onEnter ||
+                     this._onPointerHover != this._hoverAnnotation.onHover ||
+                     this._onPointerExit != this._hoverAnnotation.onExit
+#if UNITY_EDITOR
+                     || this._onPointerDragFromEditorEnter != this._hoverAnnotation.onDragFromEditorEnter
+                     || this._onPointerDragFromEditorHover != this._hoverAnnotation.onDragFromEditorHover
+                     || this._onPointerDragFromEditorExit != this._hoverAnnotation.onDragFromEditorExit
+                     || this._onPointerDragFromEditorRelease != this._hoverAnnotation.onDragFromEditorRelease
+#endif
+                , () => "Shouldn't call _updateAnnotations if nothing has changed.");
+
+            if (this._hoverAnnotation != null && this.attached) {
+                RendererBinding.instance.mouseTracker.detachAnnotation(this._hoverAnnotation);
+            }
+
+            if (this._onPointerEnter != null ||
+                this._onPointerHover != null ||
+                this._onPointerExit != null
+#if UNITY_EDITOR
+                || this._onPointerDragFromEditorEnter != null
+                || this._onPointerDragFromEditorHover != null
+                || this._onPointerDragFromEditorExit != null
+                || this._onPointerDragFromEditorRelease != null
+#endif
+            ) {
+                this._hoverAnnotation = new MouseTrackerAnnotation(
+                    onEnter: this._onPointerEnter,
+                    onHover: this._onPointerHover,
+                    onExit: this._onPointerExit
+#if UNITY_EDITOR
+                    , onDragFromEditorEnter: this._onPointerDragFromEditorEnter
+                    , onDragFromEditorHover: this._onPointerDragFromEditorHover
+                    , onDragFromEditorExit: this._onPointerDragFromEditorExit
+                    , onDragFromEditorRelease: this._onPointerDragFromEditorRelease
+#endif
+                );
+
+                if (this.attached) {
+                    RendererBinding.instance.mouseTracker.attachAnnotation(this._hoverAnnotation);
+                }
+            }
+            else {
+                this._hoverAnnotation = null;
+            }
+
+            this.markNeedsPaint();
+        }
+
+        public override void attach(object owner) {
+            base.attach(owner);
+            if (this._hoverAnnotation != null) {
+                RendererBinding.instance.mouseTracker.attachAnnotation(this._hoverAnnotation);
+            }
+        }
+
+        public override void detach() {
+            base.detach();
+            if (this._hoverAnnotation != null) {
+                RendererBinding.instance.mouseTracker.detachAnnotation(this._hoverAnnotation);
+            }
+        }
+
+        public override void paint(PaintingContext context, Offset offset) {
+            if (this._hoverAnnotation != null) {
+                AnnotatedRegionLayer<MouseTrackerAnnotation> layer = new AnnotatedRegionLayer<MouseTrackerAnnotation>(
+                    this._hoverAnnotation, size: this.size, offset: offset);
+
+                context.pushLayer(layer, base.paint, offset);
+            }
+            else {
+                base.paint(context, offset);
+            }
+        }
 
         protected override void performResize() {
             this.size = this.constraints.biggest;
@@ -1931,21 +2141,11 @@ namespace Unity.UIWidgets.rendering {
                 return;
             }
 
-            if (this.onPointerHover != null && evt is PointerHoverEvent) {
-                this.onPointerHover((PointerHoverEvent) evt);
+            if (this.onPointerSignal != null && evt is PointerSignalEvent) {
+                this.onPointerSignal((PointerSignalEvent) evt);
                 return;
             }
-
-            if (this.onPointerLeave != null && evt is PointerLeaveEvent) {
-                this.onPointerLeave((PointerLeaveEvent) evt);
-                return;
-            }
-
-            if (this.onPointerEnter != null && evt is PointerEnterEvent) {
-                this.onPointerEnter((PointerEnterEvent) evt);
-                return;
-            }
-
+            
             if (this.onPointerScroll != null && evt is PointerScrollEvent) {
                 this.onPointerScroll((PointerScrollEvent) evt);
             }
@@ -1962,6 +2162,18 @@ namespace Unity.UIWidgets.rendering {
                 listeners.Add("move");
             }
 
+            if (this.onPointerEnter != null) {
+                listeners.Add("enter");
+            }
+
+            if (this.onPointerHover != null) {
+                listeners.Add("hover");
+            }
+
+            if (this.onPointerExit != null) {
+                listeners.Add("exit");
+            }
+
             if (this.onPointerUp != null) {
                 listeners.Add("up");
             }
@@ -1970,16 +2182,8 @@ namespace Unity.UIWidgets.rendering {
                 listeners.Add("cancel");
             }
 
-            if (this.onPointerHover != null) {
-                listeners.Add("hover");
-            }
-
-            if (this.onPointerEnter != null) {
-                listeners.Add("enter");
-            }
-
-            if (this.onPointerLeave != null) {
-                listeners.Add("leave");
+            if (this.onPointerSignal != null) {
+                listeners.Add("signal");
             }
 
             if (listeners.isEmpty()) {
@@ -2160,7 +2364,7 @@ namespace Unity.UIWidgets.rendering {
             return base.computeMinIntrinsicHeight(width);
         }
 
-        protected override float computeMaxIntrinsicHeight(float width) {
+        protected internal override float computeMaxIntrinsicHeight(float width) {
             if (this.offstage) {
                 return 0.0f;
             }
@@ -2475,7 +2679,11 @@ namespace Unity.UIWidgets.rendering {
 
         public override void paint(PaintingContext context, Offset offset) {
             AnnotatedRegionLayer<T> layer =
-                new AnnotatedRegionLayer<T>(value: this.value, size: this.sized ? this.size : null);
+                new AnnotatedRegionLayer<T>(
+                    value: this.value,
+                    size: this.sized ? this.size : null,
+                    offset: this.sized ? offset : null);
+
             context.pushLayer(layer, base.paint, offset);
         }
     }

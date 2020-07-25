@@ -70,9 +70,9 @@ namespace Unity.UIWidgets.animation {
             this.end = end;
         }
 
-        public T begin;
+        public virtual T begin { get; set; }
 
-        public T end;
+        public virtual T end { get; set; }
 
         public abstract T lerp(float t);
 
@@ -186,6 +186,17 @@ namespace Unity.UIWidgets.animation {
         }
     }
 
+    public class NullableFloatTween : Tween<float?> {
+        public NullableFloatTween(float? begin = null, float? end = null) : base(begin: begin, end: end) {
+        }
+
+        public override float? lerp(float t) {
+            D.assert(this.begin != null);
+            D.assert(this.end != null);
+            return this.begin + (this.end - this.begin) * t;
+        }
+    }
+
     public class FloatTween : Tween<float> {
         public FloatTween(float begin, float end) : base(begin: begin, end: end) {
         }
@@ -210,6 +221,19 @@ namespace Unity.UIWidgets.animation {
 
         public override Offset lerp(float t) {
             return (this.begin + (this.end - this.begin) * t);
+        }
+    }
+
+    class ConstantTween<T> : Tween<T> {
+        public ConstantTween(T value) : base(begin: value, end: value) {
+        }
+
+        public override T lerp(float t) {
+            return this.begin;
+        }
+
+        public override string ToString() {
+            return $"{this.GetType()}(value: {this.begin})";
         }
     }
 

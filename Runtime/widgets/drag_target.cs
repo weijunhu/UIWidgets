@@ -1,11 +1,9 @@
 using System.Collections.Generic;
-using System.Linq;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.gestures;
 using Unity.UIWidgets.painting;
 using Unity.UIWidgets.rendering;
 using Unity.UIWidgets.ui;
-using Unity.UIWidgets.utils;
 
 namespace Unity.UIWidgets.widgets {
     public delegate bool DragTargetWillAccept<T>(T data);
@@ -23,6 +21,17 @@ namespace Unity.UIWidgets.widgets {
     public enum DragAnchor {
         child,
         pointer
+    }
+    
+    static class _DragUtils {
+        public static List<T> _mapAvatarsToData<T>(List<_DragAvatar<T>> avatars) {
+            List<T> ret = new List<T>(avatars.Count);
+            foreach (var avatar in avatars) {
+                ret.Add(avatar.data);
+            }
+
+            return ret;
+        }
     }
 
     public class Draggable<T> : StatefulWidget {
@@ -364,8 +373,8 @@ namespace Unity.UIWidgets.widgets {
             return new MetaData(
                 metaData: this,
                 behavior: HitTestBehavior.translucent,
-                child: this.widget.builder(context, DragUtils._mapAvatarsToData(this._candidateAvatars),
-                    DragUtils._mapAvatarsToData(this._rejectedAvatars)));
+                child: this.widget.builder(context, _DragUtils._mapAvatarsToData(this._candidateAvatars),
+                    _DragUtils._mapAvatarsToData(this._rejectedAvatars)));
         }
     }
 
@@ -461,7 +470,7 @@ namespace Unity.UIWidgets.widgets {
             HitTestResult result = new HitTestResult();
             WidgetsBinding.instance.hitTest(result, globalPosition + this.feedbackOffset);
 
-            List<_DragTargetState<T>> targets = this._getDragTargets(result.path.ToList());
+            List<_DragTargetState<T>> targets = this._getDragTargets(result.path);
 
             bool listsMatch = false;
             if (targets.Count >= this._enteredTargets.Count && this._enteredTargets.isNotEmpty()) {
@@ -494,7 +503,7 @@ namespace Unity.UIWidgets.widgets {
             this._activeTarget = newTarget;
         }
 
-        List<_DragTargetState<T>> _getDragTargets(List<HitTestEntry> path) {
+        List<_DragTargetState<T>> _getDragTargets(IList<HitTestEntry> path) {
             List<_DragTargetState<T>> ret = new List<_DragTargetState<T>>();
 
             foreach (HitTestEntry entry in path) {

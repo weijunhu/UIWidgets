@@ -152,7 +152,7 @@ namespace Unity.UIWidgets.widgets {
             D.assert(details != null);
             D.assert(
                 motionStartDistanceThreshold == null || motionStartDistanceThreshold > 0.0,
-                "motionStartDistanceThreshold must be a positive number or null"
+                () => "motionStartDistanceThreshold must be a positive number or null"
             );
 
             this._del = del;
@@ -423,7 +423,7 @@ namespace Unity.UIWidgets.widgets {
             }
         }
 
-        protected bool applyMoveTo(float value) {
+        protected virtual bool applyMoveTo(float value) {
             return this.del.setPixels(value) == 0.0;
         }
 

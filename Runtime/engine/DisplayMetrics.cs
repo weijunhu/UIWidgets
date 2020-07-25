@@ -25,6 +25,7 @@ namespace Unity.UIWidgets.engine {
         void OnEnable();
         void OnGUI();
         void Update();
+        void onViewMetricsChanged();
 
         float devicePixelRatio { get; }
 
@@ -46,10 +47,13 @@ namespace Unity.UIWidgets.engine {
         }
 
         public void Update() {
+            
+        }
+
+        public void onViewMetricsChanged() {
             //view metrics marks dirty
             this._viewMetrics = null;
         }
-
 
         public float devicePixelRatio {
             get {
@@ -183,7 +187,7 @@ namespace Unity.UIWidgets.engine {
 
 #if UNITY_IOS
         [DllImport("__Internal")]
-        static extern int IOSDeviceScaleFactor();
+        static extern float IOSDeviceScaleFactor();
 
 		[DllImport("__Internal")]
 		static extern viewMetrics IOSGetViewportPadding();

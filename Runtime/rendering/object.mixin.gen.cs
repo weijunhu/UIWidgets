@@ -7,7 +7,7 @@ using UnityEngine;
 namespace Unity.UIWidgets.rendering {
 
     public abstract class RenderObjectWithChildMixinRenderObject<ChildType> : RenderObject, RenderObjectWithChildMixin<ChildType>, RenderObjectWithChildMixin where ChildType : RenderObject {
-        public bool debugValidateChild(RenderObject child) {
+        public virtual bool debugValidateChild(RenderObject child) {
             D.assert(() => {
                 if (!(child is ChildType)) {
                     throw new UIWidgetsError(
@@ -88,7 +88,7 @@ namespace Unity.UIWidgets.rendering {
 
 
     public abstract class RenderObjectWithChildMixinRenderBox<ChildType> : RenderBox, RenderObjectWithChildMixin<ChildType>, RenderObjectWithChildMixin where ChildType : RenderObject {
-        public bool debugValidateChild(RenderObject child) {
+        public virtual bool debugValidateChild(RenderObject child) {
             D.assert(() => {
                 if (!(child is ChildType)) {
                     throw new UIWidgetsError(
@@ -466,10 +466,10 @@ namespace Unity.UIWidgets.rendering {
         }
 
         public virtual void insert(ChildType child, ChildType after = null) {
-            D.assert(child != this, "A RenderObject cannot be inserted into itself.");
+            D.assert(child != this, () => "A RenderObject cannot be inserted into itself.");
             D.assert(after != this,
-                "A RenderObject cannot simultaneously be both the parent and the sibling of another RenderObject.");
-            D.assert(child != after, "A RenderObject cannot be inserted after itself.");
+                () => "A RenderObject cannot simultaneously be both the parent and the sibling of another RenderObject.");
+            D.assert(child != after, () => "A RenderObject cannot be inserted after itself.");
             D.assert(child != this._firstChild);
             D.assert(child != this._lastChild);
 
@@ -765,10 +765,10 @@ namespace Unity.UIWidgets.rendering {
         }
 
         public virtual void insert(ChildType child, ChildType after = null) {
-            D.assert(child != this, "A RenderObject cannot be inserted into itself.");
+            D.assert(child != this, () => "A RenderObject cannot be inserted into itself.");
             D.assert(after != this,
-                "A RenderObject cannot simultaneously be both the parent and the sibling of another RenderObject.");
-            D.assert(child != after, "A RenderObject cannot be inserted after itself.");
+                () => "A RenderObject cannot simultaneously be both the parent and the sibling of another RenderObject.");
+            D.assert(child != after, () => "A RenderObject cannot be inserted after itself.");
             D.assert(child != this._firstChild);
             D.assert(child != this._lastChild);
 
@@ -994,7 +994,7 @@ namespace Unity.UIWidgets.rendering {
             get { return this._childCount; }
         }
 
-        public new bool debugValidateChild(RenderObject child) {
+        public override bool debugValidateChild(RenderObject child) {
             D.assert(() => {
                 if (!(child is ChildType)) {
                     throw new UIWidgetsError(
@@ -1064,10 +1064,10 @@ namespace Unity.UIWidgets.rendering {
         }
 
         public virtual void insert(ChildType child, ChildType after = null) {
-            D.assert(child != this, "A RenderObject cannot be inserted into itself.");
+            D.assert(child != this, () => "A RenderObject cannot be inserted into itself.");
             D.assert(after != this,
-                "A RenderObject cannot simultaneously be both the parent and the sibling of another RenderObject.");
-            D.assert(child != after, "A RenderObject cannot be inserted after itself.");
+                () => "A RenderObject cannot simultaneously be both the parent and the sibling of another RenderObject.");
+            D.assert(child != after, () => "A RenderObject cannot be inserted after itself.");
             D.assert(child != this._firstChild);
             D.assert(child != this._lastChild);
 

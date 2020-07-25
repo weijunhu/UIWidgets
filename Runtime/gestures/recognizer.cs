@@ -8,14 +8,38 @@ using UnityEngine;
 namespace Unity.UIWidgets.gestures {
     public delegate T RecognizerCallback<T>();
 
+    public enum DragStartBehavior {
+        down,
+        start
+    }
+
     public abstract class GestureRecognizer : DiagnosticableTree, GestureArenaMember {
-        protected GestureRecognizer(object debugOwner = null) {
+        protected GestureRecognizer(object debugOwner = null, PointerDeviceKind? kind = null) {
             this.debugOwner = debugOwner;
+            this._kind = kind;
         }
 
         public readonly object debugOwner;
 
-        public abstract void addPointer(PointerDownEvent evt);
+        readonly PointerDeviceKind? _kind;
+
+        public void addPointer(PointerDownEvent evt) {
+            if (this.isPointerAllowed(evt)) {
+                this.addAllowedPointer(evt);
+            }
+            else {
+                this.handleNonAllowedPointer(evt);
+            }
+        }
+
+        public abstract void addAllowedPointer(PointerDownEvent evt);
+
+        protected virtual void handleNonAllowedPointer(PointerDownEvent evt) {
+        }
+
+        protected virtual bool isPointerAllowed(PointerDownEvent evt) {
+            return this._kind == null || this._kind == evt.kind;
+        }
 
         public virtual void addScrollPointer(PointerScrollEvent evt) {
         }
@@ -72,7 +96,8 @@ namespace Unity.UIWidgets.gestures {
     }
 
     public abstract class OneSequenceGestureRecognizer : GestureRecognizer {
-        protected OneSequenceGestureRecognizer(object debugOwner = null) : base(debugOwner) {
+        protected OneSequenceGestureRecognizer(object debugOwner = null, PointerDeviceKind? kind = null) : base(
+            debugOwner, kind) {
         }
 
         readonly Dictionary<int, GestureArenaEntry> _entries = new Dictionary<int, GestureArenaEntry>();
@@ -169,18 +194,34 @@ namespace Unity.UIWidgets.gestures {
     public enum GestureRecognizerState {
         ready,
         possible,
+        accepted,
         defunct,
     }
 
     public abstract class PrimaryPointerGestureRecognizer : OneSequenceGestureRecognizer {
         protected PrimaryPointerGestureRecognizer(
             TimeSpan? deadline = null,
-            object debugOwner = null
-        ) : base(debugOwner: debugOwner) {
+            object debugOwner = null,
+            PointerDeviceKind? kind = null,
+            float? preAcceptSlopTolerance = Constants.kTouchSlop,
+            float? postAcceptSlopTolerance = Constants.kTouchSlop
+        ) : base(debugOwner: debugOwner, kind: kind) {
+            D.assert(preAcceptSlopTolerance == null || preAcceptSlopTolerance >= 0,
+                () => "The preAcceptSlopTolerance must be positive or null");
+
+            D.assert(postAcceptSlopTolerance == null || postAcceptSlopTolerance >= 0,
+                () => "The postAcceptSlopTolerance must be positive or null");
+
             this.deadline = deadline;
+            this.preAcceptSlopTolerance = preAcceptSlopTolerance;
+            this.postAcceptSlopTolerance = postAcceptSlopTolerance;
         }
 
         public readonly TimeSpan? deadline;
+
+        public readonly float? preAcceptSlopTolerance;
+
+        public readonly float? postAcceptSlopTolerance;
 
         public GestureRecognizerState state = GestureRecognizerState.ready;
 
@@ -190,7 +231,7 @@ namespace Unity.UIWidgets.gestures {
 
         Timer _timer;
 
-        public override void addPointer(PointerDownEvent evt) {
+        public override void addAllowedPointer(PointerDownEvent evt) {
             this.startTrackingPointer(evt.pointer);
             if (this.state == GestureRecognizerState.ready) {
                 this.state = GestureRecognizerState.possible;
@@ -204,8 +245,16 @@ namespace Unity.UIWidgets.gestures {
 
         protected override void handleEvent(PointerEvent evt) {
             D.assert(this.state != GestureRecognizerState.ready);
-            if (this.state == GestureRecognizerState.possible && evt.pointer == this.primaryPointer) {
-                if (evt is PointerMoveEvent && this._getDistance(evt) > Constants.kTouchSlop) {
+
+            if (evt.pointer == this.primaryPointer) {
+                bool isPreAcceptSlopPastTolerance = this.state == GestureRecognizerState.possible &&
+                                                    this.preAcceptSlopTolerance != null &&
+                                                    this._getDistance(evt) > this.preAcceptSlopTolerance;
+                bool isPostAcceptSlopPastTolerance = this.state == GestureRecognizerState.accepted &&
+                                                     this.postAcceptSlopTolerance != null &&
+                                                     this._getDistance(evt) > this.postAcceptSlopTolerance;
+
+                if (evt is PointerMoveEvent && (isPreAcceptSlopPastTolerance || isPostAcceptSlopPastTolerance)) {
                     this.resolve(GestureDisposition.rejected);
                     this.stopTrackingPointer(this.primaryPointer);
                 }
@@ -223,8 +272,15 @@ namespace Unity.UIWidgets.gestures {
             D.assert(this.deadline == null);
         }
 
-        public override void rejectGesture(int pointer) {
+        public override void acceptGesture(int pointer) {
             if (pointer == this.primaryPointer && this.state == GestureRecognizerState.possible) {
+                this.state = GestureRecognizerState.accepted;
+            }
+        }
+
+        public override void rejectGesture(int pointer) {
+            if (pointer == this.primaryPointer && (this.state == GestureRecognizerState.possible ||
+                                                   this.state == GestureRecognizerState.accepted)) {
                 this._stopTimer();
                 this.state = GestureRecognizerState.defunct;
             }

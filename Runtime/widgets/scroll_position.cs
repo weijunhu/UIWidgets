@@ -17,7 +17,8 @@ namespace Unity.UIWidgets.widgets {
             ScrollContext context = null,
             bool keepScrollOffset = true,
             ScrollPosition oldPosition = null,
-            string debugLabel = null
+            string debugLabel = null,
+            object coordinator = null
         ) {
             D.assert(physics != null);
             D.assert(context != null);
@@ -27,6 +28,7 @@ namespace Unity.UIWidgets.widgets {
             this.context = context;
             this.keepScrollOffset = keepScrollOffset;
             this.debugLabel = debugLabel;
+            this._coordinator = coordinator;
 
             if (oldPosition != null) {
                 this.absorb(oldPosition);
@@ -45,6 +47,8 @@ namespace Unity.UIWidgets.widgets {
 
         public readonly string debugLabel;
 
+        internal readonly object _coordinator;
+
         public float minScrollExtent {
             get { return this._minScrollExtent.Value; }
         }
@@ -56,6 +60,14 @@ namespace Unity.UIWidgets.widgets {
         }
 
         float? _maxScrollExtent;
+
+        public bool hasMinScrollExtent {
+            get { return this._minScrollExtent != null; }
+        }
+
+        public bool hasMaxScrollExtent {
+            get { return this._maxScrollExtent != null; }
+        }
 
         public override float pixels {
             get {
@@ -148,7 +160,7 @@ namespace Unity.UIWidgets.widgets {
         public override void correctBy(float correction) {
             D.assert(
                 this._pixels != null,
-                "An initial pixels value must exist by caling correctPixels on the ScrollPosition"
+                () => "An initial pixels value must exist by caling correctPixels on the ScrollPosition"
             );
 
             this._pixels += correction;

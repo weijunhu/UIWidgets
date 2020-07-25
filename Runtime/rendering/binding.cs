@@ -11,16 +11,20 @@ namespace Unity.UIWidgets.rendering {
             set { PaintingBinding.instance = value; }
         }
 
-        public RendererBinding() {
+        public RendererBinding(bool inEditorWindow = false) {
             this._pipelineOwner = new PipelineOwner(
                 onNeedVisualUpdate: this.ensureVisualUpdate
             );
 
             Window.instance.onMetricsChanged += this.handleMetricsChanged;
             Window.instance.onTextScaleFactorChanged += this.handleTextScaleFactorChanged;
+            Window.instance.onPlatformBrightnessChanged += this.handlePlatformBrightnessChanged;
             this.initRenderView();
             D.assert(this.renderView != null);
             this.addPersistentFrameCallback(this._handlePersistentFrameCallback);
+
+            this.inEditorWindow = inEditorWindow;
+            this._mouseTracker = this._createMouseTracker();
         }
 
         public void initRenderView() {
@@ -28,6 +32,12 @@ namespace Unity.UIWidgets.rendering {
             this.renderView = new RenderView(configuration: this.createViewConfiguration());
             this.renderView.scheduleInitialFrame();
         }
+
+        public MouseTracker mouseTracker {
+            get { return this._mouseTracker; }
+        }
+
+        MouseTracker _mouseTracker;
 
         public PipelineOwner pipelineOwner {
             get { return this._pipelineOwner; }
@@ -48,6 +58,9 @@ namespace Unity.UIWidgets.rendering {
         protected virtual void handleTextScaleFactorChanged() {
         }
 
+        protected virtual void handlePlatformBrightnessChanged() {
+        }
+
         protected virtual ViewConfiguration createViewConfiguration() {
             var devicePixelRatio = Window.instance.devicePixelRatio;
             return new ViewConfiguration(
@@ -58,6 +71,16 @@ namespace Unity.UIWidgets.rendering {
 
         void _handlePersistentFrameCallback(TimeSpan timeStamp) {
             this.drawFrame();
+        }
+
+        readonly protected bool inEditorWindow;
+
+        MouseTracker _createMouseTracker() {
+            return new MouseTracker(this.pointerRouter, (Offset offset) => {
+                return this.renderView.layer.find<MouseTrackerAnnotation>(
+                    offset
+                );
+            }, this.inEditorWindow);
         }
 
         protected virtual void drawFrame() {

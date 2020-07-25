@@ -16,9 +16,15 @@ namespace Unity.UIWidgets.gestures {
     public delegate void GestureDragCancelCallback();
 
     public abstract class DragGestureRecognizer : OneSequenceGestureRecognizer {
-        public DragGestureRecognizer(object debugOwner = null)
-            : base(debugOwner: debugOwner) {
+        public DragGestureRecognizer(
+            object debugOwner = null,
+            PointerDeviceKind? kind = null,
+            DragStartBehavior dragStartBehavior = DragStartBehavior.down)
+            : base(debugOwner: debugOwner, kind: kind) {
+            this.dragStartBehavior = dragStartBehavior;
         }
+
+        public DragStartBehavior dragStartBehavior;
 
         public GestureDragDownCallback onDown;
 
@@ -65,7 +71,7 @@ namespace Unity.UIWidgets.gestures {
             }
         }
 
-        public override void addPointer(PointerDownEvent evt) {
+        public override void addAllowedPointer(PointerDownEvent evt) {
             this.startTrackingPointer(evt.pointer);
             this._velocityTrackers[evt.pointer] = new VelocityTracker();
             if (this._state == _DragState.ready) {
@@ -89,7 +95,8 @@ namespace Unity.UIWidgets.gestures {
         protected override void handleEvent(PointerEvent evt) {
             D.assert(this._state != _DragState.ready);
             if (evt is PointerScrollEvent) {
-                Offset delta = evt.delta;
+                var scrollEvt = (PointerScrollEvent) evt;
+                Offset delta = scrollEvt.scrollDelta;
                 if (this.onUpdate != null) {
                     this.invokeCallback<object>("onUpdate", () => {
                         this.onUpdate(new DragUpdateDetails(
@@ -146,6 +153,20 @@ namespace Unity.UIWidgets.gestures {
                 this._state = _DragState.accepted;
                 Offset delta = this._pendingDragOffset;
                 var timestamp = this._lastPendingEventTimestamp;
+
+                Offset updateDelta = null;
+                switch (this.dragStartBehavior) {
+                    case DragStartBehavior.start:
+                        this._initialPosition = this._initialPosition + delta;
+                        updateDelta = Offset.zero;
+                        break;
+                    case DragStartBehavior.down:
+                        updateDelta = this._getDeltaForDetails(delta);
+                        break;
+                }
+
+                D.assert(updateDelta != null);
+
                 this._pendingDragOffset = Offset.zero;
                 this._lastPendingEventTimestamp = default(TimeSpan);
                 if (this.onStart != null) {
@@ -158,13 +179,13 @@ namespace Unity.UIWidgets.gestures {
                     });
                 }
 
-                if (delta != Offset.zero && this.onUpdate != null) {
+                if (updateDelta != Offset.zero && this.onUpdate != null) {
                     this.invokeCallback<object>("onUpdate", () => {
                         this.onUpdate(new DragUpdateDetails(
                             sourceTimeStamp: timestamp,
-                            delta: this._getDeltaForDetails(delta),
-                            primaryDelta: this._getPrimaryValueFromOffset(delta),
-                            globalPosition: this._initialPosition
+                            delta: updateDelta,
+                            primaryDelta: this._getPrimaryValueFromOffset(updateDelta),
+                            globalPosition: this._initialPosition + updateDelta
                         ));
                         return null;
                     });
@@ -244,11 +265,16 @@ namespace Unity.UIWidgets.gestures {
             this._velocityTrackers.Clear();
             base.dispose();
         }
+
+        public override void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+            base.debugFillProperties(properties);
+            properties.add(new EnumProperty<DragStartBehavior>("start behavior", this.dragStartBehavior));
+        }
     }
 
     public class VerticalDragGestureRecognizer : DragGestureRecognizer {
-        public VerticalDragGestureRecognizer(object debugOwner = null)
-            : base(debugOwner: debugOwner) {
+        public VerticalDragGestureRecognizer(object debugOwner = null, PointerDeviceKind? kind = null)
+            : base(debugOwner: debugOwner, kind: kind) {
         }
 
         protected override bool _isFlingGesture(VelocityEstimate estimate) {
@@ -275,8 +301,8 @@ namespace Unity.UIWidgets.gestures {
     }
 
     public class HorizontalDragGestureRecognizer : DragGestureRecognizer {
-        public HorizontalDragGestureRecognizer(object debugOwner = null)
-            : base(debugOwner: debugOwner) {
+        public HorizontalDragGestureRecognizer(object debugOwner = null, PointerDeviceKind? kind = null)
+            : base(debugOwner: debugOwner, kind: kind) {
         }
 
         protected override bool _isFlingGesture(VelocityEstimate estimate) {
@@ -303,8 +329,8 @@ namespace Unity.UIWidgets.gestures {
     }
 
     public class PanGestureRecognizer : DragGestureRecognizer {
-        public PanGestureRecognizer(object debugOwner = null)
-            : base(debugOwner: debugOwner) {
+        public PanGestureRecognizer(object debugOwner = null, PointerDeviceKind? kind = null)
+            : base(debugOwner: debugOwner, kind: kind) {
         }
 
         protected override bool _isFlingGesture(VelocityEstimate estimate) {

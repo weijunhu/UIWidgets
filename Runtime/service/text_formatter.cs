@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Text.RegularExpressions;
 using Unity.UIWidgets.foundation;
+using UnityEngine;
 
 namespace Unity.UIWidgets.service {
     public abstract class TextInputFormatter {
@@ -51,17 +52,21 @@ namespace Unity.UIWidgets.service {
     public class LengthLimitingTextInputFormatter : TextInputFormatter {
 
         public LengthLimitingTextInputFormatter(int? maxLength) {
-            D.assert(maxLength == null || maxLength > 0);
+            D.assert(maxLength == null || maxLength == -1 || maxLength > 0);
             this.maxLength = maxLength;
         }
 
         public readonly int? maxLength;
 
         public override TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
-            if (this.maxLength != null && newValue.text.Length > this.maxLength) {
+            if (this.maxLength != null && this.maxLength > 0 && newValue.text.Length > this.maxLength) {
+                if (Input.compositionString.Length > 0) {
+                    return newValue;
+                }
+
                 TextSelection newSelection = newValue.selection.copyWith(
-                    baseOffset: Math.Min(newValue.selection.start, this.maxLength.Value),
-                    extentOffset: Math.Min(newValue.selection.end, this.maxLength.Value)
+                    baseOffset: Mathf.Min(newValue.selection.start, this.maxLength.Value),
+                    extentOffset: Mathf.Min(newValue.selection.end, this.maxLength.Value)
                 );
                 
                 string truncated = newValue.text.Substring(0, this.maxLength.Value);
@@ -71,9 +76,36 @@ namespace Unity.UIWidgets.service {
                     composing: TextRange.empty
                 );
             }
+
             return newValue;
         }
-}
+    }
+
+    public class WhitelistingTextInputFormatter : TextInputFormatter {
+        public WhitelistingTextInputFormatter(Regex whitelistedPattern) {
+            D.assert(whitelistedPattern != null);
+            this.whitelistedPattern = whitelistedPattern;
+        }
+
+        readonly Regex whitelistedPattern;
+
+        public override TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+            return Util._selectionAwareTextManipulation(
+                value: newValue,
+                substringManipulation: substring => {
+                    string groups = "";
+                    foreach (Match match in this.whitelistedPattern.Matches(input: substring)) {
+                        groups += match.Groups[0].Value;
+                    }
+
+                    return groups;
+                }
+            );
+        }
+
+        public static readonly WhitelistingTextInputFormatter digitsOnly
+            = new WhitelistingTextInputFormatter(new Regex(@"\d+"));
+    }
 
     static class Util {
         internal static TextEditingValue _selectionAwareTextManipulation(TextEditingValue value,

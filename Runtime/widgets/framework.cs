@@ -141,7 +141,6 @@ namespace Unity.UIWidgets.widgets {
         static readonly Dictionary<CompositeKey, Element> _registry =
             new Dictionary<CompositeKey, Element>();
 
-        static readonly HashSet<CompositeKey> _removedKeys = new HashSet<CompositeKey>();
         static readonly HashSet<Element> _debugIllFatedElements = new HashSet<Element>();
 
         static readonly Dictionary<CompositeKey, Element> _debugReservations =
@@ -175,7 +174,6 @@ namespace Unity.UIWidgets.widgets {
             });
             if (_registry[compKey] == element) {
                 _registry.Remove(compKey);
-                _removedKeys.Add(compKey);
             }
         }
 
@@ -1950,6 +1948,12 @@ namespace Unity.UIWidgets.widgets {
             }
 
             properties.add(new FlagProperty("dirty", value: this.dirty, ifTrue: "dirty"));
+            if (this._dependencies != null && this._dependencies.isNotEmpty()) {
+                List<DiagnosticsNode> diagnosticsDependencies = this._dependencies
+                    .Select((InheritedElement element) => element.widget.toDiagnosticsNode(style: DiagnosticsTreeStyle.sparse))
+                    .ToList();
+                properties.add(new DiagnosticsProperty<List<DiagnosticsNode>>("dependencies", diagnosticsDependencies));
+            }
         }
 
         public override List<DiagnosticsNode> debugDescribeChildren() {
@@ -2121,6 +2125,8 @@ namespace Unity.UIWidgets.widgets {
     public delegate Widget IndexedWidgetBuilder(BuildContext context, int index);
 
     public delegate Widget TransitionBuilder(BuildContext context, Widget child);
+    
+    public delegate Widget ControlsWidgetBuilder(BuildContext context, VoidCallback onStepContinue = null, VoidCallback onStepCancel = null);
 
     public abstract class ComponentElement : Element {
         protected ComponentElement(Widget widget) : base(widget) {
@@ -2317,7 +2323,7 @@ namespace Unity.UIWidgets.widgets {
                         "the inherited widget is in a constructor or an initState() method, " +
                         "then the rebuilt dependent widget will not reflect the changes in the " +
                         "inherited widget.\n" +
-                        "Typically references to to inherited widgets should occur in widget build() methods. Alternatively, " +
+                        "Typically references to inherited widgets should occur in widget build() methods. Alternatively, " +
                         "initialization based on inherited widgets can be placed in the didChangeDependencies method, which " +
                         "is called after initState and whenever the dependencies change thereafter."
                     );
@@ -2632,7 +2638,7 @@ namespace Unity.UIWidgets.widgets {
 
             var newChildren = oldChildren.Count == newWidgets.Count
                 ? oldChildren
-                : Enumerable.Repeat((Element) null, newWidgets.Count).ToList();
+                : CollectionUtils.CreateRepeatedList<Element>(null, newWidgets.Count);
 
             Element previousChild = null;
 
@@ -2749,14 +2755,14 @@ namespace Unity.UIWidgets.widgets {
         public override void deactivate() {
             base.deactivate();
             D.assert(!this.renderObject.attached,
-                "A RenderObject was still attached when attempting to deactivate its " +
+                () => "A RenderObject was still attached when attempting to deactivate its " +
                 "RenderObjectElement: " + this.renderObject);
         }
 
         public override void unmount() {
             base.unmount();
             D.assert(!this.renderObject.attached,
-                "A RenderObject was still attached when attempting to unmount its " +
+                () => "A RenderObject was still attached when attempting to unmount its " +
                 "RenderObjectElement: " + this.renderObject);
             this.widget.didUnmountRenderObject(this.renderObject);
         }
@@ -2957,7 +2963,7 @@ namespace Unity.UIWidgets.widgets {
 
         public override void mount(Element parent, object newSlot) {
             base.mount(parent, newSlot);
-            this._children = Enumerable.Repeat((Element) null, this.widget.children.Count).ToList();
+            this._children = CollectionUtils.CreateRepeatedList<Element>(null, this.widget.children.Count);
             Element previousChild = null;
             for (int i = 0; i < this._children.Count; i += 1) {
                 Element newChild = this.inflateWidget(this.widget.children[i], previousChild);

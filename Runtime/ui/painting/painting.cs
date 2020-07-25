@@ -5,14 +5,14 @@ using UnityEngine;
 namespace Unity.UIWidgets.ui {
     class PaintingUtils {
         internal static bool _offsetIsValid(Offset offset) {
-            D.assert(offset != null, "Offset argument was null.");
-            D.assert(!offset.dx.isNaN() && !offset.dy.isNaN(), "Offset argument contained a NaN value.");
+            D.assert(offset != null, () => "Offset argument was null.");
+            D.assert(!offset.dx.isNaN() && !offset.dy.isNaN(), () => "Offset argument contained a NaN value.");
             return true;
         }
 
         internal static bool _radiusIsValid(Radius radius) {
-            D.assert(radius != null, "Radius argument was null.");
-            D.assert(!radius.x.isNaN() && !radius.y.isNaN(), "Radius argument contained a NaN value.");
+            D.assert(radius != null, () => "Radius argument was null.");
+            D.assert(!radius.x.isNaN() && !radius.y.isNaN(), () => "Radius argument contained a NaN value.");
             return true;
         }
 
@@ -200,6 +200,7 @@ namespace Unity.UIWidgets.ui {
         solid,
         outer,
         inner,
+        fast_shadow
     }
 
     public class MaskFilter : IEquatable<MaskFilter> {
@@ -210,6 +211,10 @@ namespace Unity.UIWidgets.ui {
 
         public static MaskFilter blur(BlurStyle style, float sigma) {
             return new MaskFilter(style, sigma);
+        }
+
+        public static MaskFilter fastShadow(float sigma) {
+            return new MaskFilter(BlurStyle.fast_shadow, sigma);
         }
 
         public readonly BlurStyle style;
@@ -329,7 +334,7 @@ namespace Unity.UIWidgets.ui {
             return new _BlurImageFilter(sigmaX, sigmaY);
         }
 
-        public static ImageFilter matrix(Matrix3 transform, FilterMode filterMode = FilterMode.Point) {
+        public static ImageFilter matrix(Matrix3 transform, FilterMode filterMode = FilterMode.Bilinear) {
             return new _MatrixImageFilter(transform, filterMode);
         }
     }
@@ -372,7 +377,7 @@ namespace Unity.UIWidgets.ui {
 
         public float strokeMiterLimit = 4.0f;
 
-        public FilterMode filterMode = FilterMode.Point;
+        public FilterMode filterMode = FilterMode.Bilinear;
 
         public ColorFilter colorFilter = null;
 

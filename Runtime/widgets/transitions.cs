@@ -5,6 +5,7 @@ using Unity.UIWidgets.rendering;
 using Unity.UIWidgets.ui;
 using UnityEngine;
 using Rect = Unity.UIWidgets.ui.Rect;
+using TextStyle = Unity.UIWidgets.painting.TextStyle;
 
 namespace Unity.UIWidgets.widgets {
     public abstract class AnimatedWidget : StatefulWidget {
@@ -202,6 +203,7 @@ namespace Unity.UIWidgets.widgets {
     public class FadeTransition : SingleChildRenderObjectWidget {
         public FadeTransition(Key key = null, Animation<float> opacity = null,
             Widget child = null) : base(key: key, child: child) {
+            D.assert(opacity != null);
             this.opacity = opacity;
         }
 
@@ -332,6 +334,8 @@ namespace Unity.UIWidgets.widgets {
             float? widthFactor = null,
             float? heightFactor = null
         ) : base(key: key, listenable: alignment) {
+            D.assert(alignment != null);
+            D.assert(child != null);
             this.child = child;
             this.widthFactor = widthFactor;
             this.heightFactor = heightFactor;
@@ -358,6 +362,48 @@ namespace Unity.UIWidgets.widgets {
         }
     }
 
+    public class DefaultTextStyleTransition : AnimatedWidget {
+        public DefaultTextStyleTransition(
+            Key key = null,
+            Animation<TextStyle> style = null,
+            Widget child = null,
+            TextAlign? textAlign = null,
+            bool softWrap = true,
+            TextOverflow overflow = TextOverflow.clip,
+            int? maxLines = null
+        ) : base(key: key, listenable: style) {
+            D.assert(style != null);
+            D.assert(child != null);
+            this.textAlign = textAlign;
+            this.softWrap = softWrap;
+            this.overflow = overflow;
+            this.maxLines = maxLines;
+            this.child = child;
+        }
+
+        Animation<TextStyle> style {
+            get { return (Animation<TextStyle>) this.listenable; }
+        }
+
+        public readonly TextAlign? textAlign;
+
+        public readonly bool softWrap;
+        public readonly TextOverflow overflow;
+        public readonly int? maxLines;
+        public readonly Widget child;
+
+        protected internal override Widget build(BuildContext context) {
+            return new DefaultTextStyle(
+                style: this.style.value,
+                textAlign: this.textAlign,
+                softWrap: this.softWrap,
+                overflow: this.overflow,
+                maxLines: this.maxLines,
+                child: this.child
+            );
+        }
+    }
+
 
     public class AnimatedBuilder : AnimatedWidget {
         public readonly TransitionBuilder builder;
@@ -368,6 +414,7 @@ namespace Unity.UIWidgets.widgets {
             Widget child = null) :
             base(key, animation) {
             D.assert(builder != null);
+            D.assert(animation != null);
             this.builder = builder;
             this.child = child;
         }

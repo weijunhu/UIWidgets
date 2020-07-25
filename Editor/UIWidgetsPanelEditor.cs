@@ -9,7 +9,7 @@ namespace Unity.UIWidgets.Editor {
         public override void OnInspectorGUI() {
             base.OnInspectorGUI();
             var pixelRatioProperty = this.serializedObject.FindProperty("devicePixelRatioOverride");
-            var antiAliasingProperty = this.serializedObject.FindProperty("antiAliasingOverride");
+            var antiAliasingProperty = this.serializedObject.FindProperty("hardwareAntiAliasing");
             EditorGUILayout.PropertyField(pixelRatioProperty);
             EditorGUILayout.PropertyField(antiAliasingProperty);
             this.serializedObject.ApplyModifiedProperties();

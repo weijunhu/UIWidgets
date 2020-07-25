@@ -28,7 +28,7 @@ namespace Unity.UIWidgets.widgets {
         protected internal override void install(OverlayEntry insertionPoint) {
             D.assert(this._overlayEntries.isEmpty());
             this._overlayEntries.AddRange(this.createOverlayEntries());
-            this.navigator.overlay?.insertAll(this._overlayEntries, insertionPoint);
+            this.navigator.overlay?.insertAll(this._overlayEntries, above: insertionPoint);
             base.install(insertionPoint);
         }
 
@@ -87,7 +87,7 @@ namespace Unity.UIWidgets.widgets {
 
         public virtual AnimationController createAnimationController() {
             D.assert(this._transitionCompleter.CurState == PromiseState.Pending,
-                $"Cannot reuse a {this.GetType()} after disposing it.");
+                () => $"Cannot reuse a {this.GetType()} after disposing it.");
             TimeSpan duration = this.transitionDuration;
             D.assert(duration >= TimeSpan.Zero);
             return new AnimationController(
@@ -99,7 +99,7 @@ namespace Unity.UIWidgets.widgets {
 
         public virtual Animation<float> createAnimation() {
             D.assert(this._transitionCompleter.CurState == PromiseState.Pending,
-                $"Cannot reuse a {this.GetType()} after disposing it.");
+                () => $"Cannot reuse a {this.GetType()} after disposing it.");
             D.assert(this._controller != null);
             return this._controller.view;
         }
@@ -122,12 +122,11 @@ namespace Unity.UIWidgets.widgets {
 
                     break;
                 case AnimationStatus.dismissed:
-                    D.assert(!this.overlayEntries.first().opaque);
-                    // We might still be the current route if a subclass is controlling the
+                    // We might still be an active route if a subclass is controlling the
                     // the transition and hits the dismissed status. For example, the iOS
                     // back gesture drives this animation to the dismissed status before
                     // popping the navigator.
-                    if (!this.isCurrent) {
+                    if (!this.isActive) {
                         this.navigator.finalizeRoute(this);
                         D.assert(this.overlayEntries.isEmpty());
                     }
@@ -145,26 +144,26 @@ namespace Unity.UIWidgets.widgets {
         readonly ProxyAnimation _secondaryAnimation = new ProxyAnimation(Animations.kAlwaysDismissedAnimation);
 
         protected internal override void install(OverlayEntry insertionPoint) {
-            D.assert(!this._transitionCompleter.isCompleted, $"Cannot install a {this.GetType()} after disposing it.");
+            D.assert(!this._transitionCompleter.isCompleted, () => $"Cannot install a {this.GetType()} after disposing it.");
             this._controller = this.createAnimationController();
-            D.assert(this._controller != null, $"{this.GetType()}.createAnimationController() returned null.");
+            D.assert(this._controller != null, () => $"{this.GetType()}.createAnimationController() returned null.");
             this._animation = this.createAnimation();
-            D.assert(this._animation != null, $"{this.GetType()}.createAnimation() returned null.");
+            D.assert(this._animation != null, () => $"{this.GetType()}.createAnimation() returned null.");
             base.install(insertionPoint);
         }
 
         protected internal override TickerFuture didPush() {
             D.assert(this._controller != null,
-                $"{this.GetType()}.didPush called before calling install() or after calling dispose().");
-            D.assert(!this._transitionCompleter.isCompleted, $"Cannot reuse a {this.GetType()} after disposing it.");
+                () => $"{this.GetType()}.didPush called before calling install() or after calling dispose().");
+            D.assert(!this._transitionCompleter.isCompleted, () => $"Cannot reuse a {this.GetType()} after disposing it.");
             this._animation.addStatusListener(this._handleStatusChanged);
             return this._controller.forward();
         }
 
         protected internal override void didReplace(Route oldRoute) {
             D.assert(this._controller != null,
-                $"{this.GetType()}.didReplace called before calling install() or after calling dispose().");
-            D.assert(!this._transitionCompleter.isCompleted, $"Cannot reuse a {this.GetType()} after disposing it.");
+                () => $"{this.GetType()}.didReplace called before calling install() or after calling dispose().");
+            D.assert(!this._transitionCompleter.isCompleted, () => $"Cannot reuse a {this.GetType()} after disposing it.");
             if (oldRoute is TransitionRoute route) {
                 this._controller.setValue(route._controller.value);
             }
@@ -175,8 +174,8 @@ namespace Unity.UIWidgets.widgets {
 
         protected internal override bool didPop(object result) {
             D.assert(this._controller != null,
-                $"{this.GetType()}.didPop called before calling install() or after calling dispose().");
-            D.assert(!this._transitionCompleter.isCompleted, $"Cannot reuse a {this.GetType()} after disposing it.");
+                () => $"{this.GetType()}.didPop called before calling install() or after calling dispose().");
+            D.assert(!this._transitionCompleter.isCompleted, () => $"Cannot reuse a {this.GetType()} after disposing it.");
             this._result = result;
             this._controller.reverse();
             return base.didPop(result);
@@ -184,16 +183,16 @@ namespace Unity.UIWidgets.widgets {
 
         protected internal override void didPopNext(Route nextRoute) {
             D.assert(this._controller != null,
-                $"{this.GetType()}.didPopNext called before calling install() or after calling dispose().");
-            D.assert(!this._transitionCompleter.isCompleted, $"Cannot reuse a {this.GetType()} after disposing it.");
+                () => $"{this.GetType()}.didPopNext called before calling install() or after calling dispose().");
+            D.assert(!this._transitionCompleter.isCompleted, () => $"Cannot reuse a {this.GetType()} after disposing it.");
             this._updateSecondaryAnimation(nextRoute);
             base.didPopNext(nextRoute);
         }
 
         protected internal override void didChangeNext(Route nextRoute) {
             D.assert(this._controller != null,
-                $"{this.GetType()}.didChangeNext called before calling install() or after calling dispose().");
-            D.assert(!this._transitionCompleter.isCompleted, $"Cannot reuse a {this.GetType()} after disposing it.");
+                () => $"{this.GetType()}.didChangeNext called before calling install() or after calling dispose().");
+            D.assert(!this._transitionCompleter.isCompleted, () => $"Cannot reuse a {this.GetType()} after disposing it.");
             this._updateSecondaryAnimation(nextRoute);
             base.didChangeNext(nextRoute);
         }
@@ -242,7 +241,7 @@ namespace Unity.UIWidgets.widgets {
         }
 
         protected internal override void dispose() {
-            D.assert(!this._transitionCompleter.isCompleted, $"Cannot dispose a {this.GetType()} twice.");
+            D.assert(!this._transitionCompleter.isCompleted, () => $"Cannot dispose a {this.GetType()} twice.");
             this._controller?.dispose();
             this._transitionCompleter.Resolve(this._result);
             base.dispose();
@@ -472,8 +471,9 @@ namespace Unity.UIWidgets.widgets {
     }
 
     public abstract class ModalRoute : LocalHistoryRouteTransitionRoute {
-        protected ModalRoute(RouteSettings settings) : base(settings) {
-        }
+        
+        protected ModalRoute() {}
+        protected ModalRoute(RouteSettings settings) : base(settings) { }
 
         public static Color _kTransparent = new Color(0x00000000);
 
@@ -596,17 +596,17 @@ namespace Unity.UIWidgets.widgets {
 
         public void addScopedWillPopCallback(WillPopCallback callback) {
             D.assert(this._scopeKey.currentState != null,
-                "Tried to add a willPop callback to a route that is not currently in the tree.");
+                () => "Tried to add a willPop callback to a route that is not currently in the tree.");
             this._willPopCallbacks.Add(callback);
         }
 
         public void removeScopedWillPopCallback(WillPopCallback callback) {
             D.assert(this._scopeKey.currentState != null,
-                "Tried to remove a willPop callback from a route that is not currently in the tree.");
+                () => "Tried to remove a willPop callback from a route that is not currently in the tree.");
             this._willPopCallbacks.Remove(callback);
         }
 
-        protected bool hasScopedWillPopCallback {
+        public bool hasScopedWillPopCallback {
             get { return this._willPopCallbacks.isNotEmpty(); }
         }
 

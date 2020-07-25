@@ -28,6 +28,7 @@ namespace Unity.UIWidgets.material {
             Key key = null,
             float elevation = 16.0f,
             Widget child = null) : base(key: key) {
+            D.assert(elevation >= 0.0f);
             this.elevation = elevation;
             this.child = child;
         }
@@ -55,17 +56,22 @@ namespace Unity.UIWidgets.material {
             GlobalKey key = null,
             Widget child = null,
             DrawerAlignment? alignment = null,
-            DrawerCallback drawerCallback = null) : base(key: key) {
+            DrawerCallback drawerCallback = null,
+            DragStartBehavior dragStartBehavior = DragStartBehavior.start
+        ) : base(key: key) {
             D.assert(child != null);
             D.assert(alignment != null);
             this.child = child;
             this.alignment = alignment ?? DrawerAlignment.start;
             this.drawerCallback = drawerCallback;
+            this.dragStartBehavior = dragStartBehavior;
         }
 
         public readonly Widget child;
 
         public readonly DrawerAlignment alignment;
+
+        public readonly DragStartBehavior? dragStartBehavior;
 
         public readonly DrawerCallback drawerCallback;
 
@@ -267,6 +273,7 @@ namespace Unity.UIWidgets.material {
                         onHorizontalDragUpdate: this._move,
                         onHorizontalDragEnd: this._settle,
                         behavior: HitTestBehavior.translucent,
+                        dragStartBehavior: this.widget.dragStartBehavior ?? DragStartBehavior.down,
                         child: new Container(width: dragAreaWidth)
                     )
                 );
@@ -278,6 +285,7 @@ namespace Unity.UIWidgets.material {
                     onHorizontalDragUpdate: this._move,
                     onHorizontalDragEnd: this._settle,
                     onHorizontalDragCancel: this._handleDragCancel,
+                    dragStartBehavior: this.widget.dragStartBehavior ?? DragStartBehavior.down,
                     child: new RepaintBoundary(
                         child: new Stack(
                             children: new List<Widget> {

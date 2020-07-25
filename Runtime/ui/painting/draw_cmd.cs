@@ -1,4 +1,4 @@
-﻿namespace Unity.UIWidgets.ui {
+﻿﻿namespace Unity.UIWidgets.ui {
     public abstract class DrawCmd {
     }
 
@@ -87,7 +87,7 @@
     }
 
     public class DrawTextBlob : DrawCmd {
-        public TextBlob textBlob;
+        public TextBlob? textBlob;
         public Offset offset;
         public Paint paint;
     }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.scheduler;
@@ -66,6 +67,9 @@ namespace Unity.UIWidgets.widgets {
                 }
                 else {
                     SchedulerBinding.instance.addPostFrameCallback(timeStamp => {
+                        if (!this.mounted) {
+                            return;
+                        }
                         ParentDataElement childElement1 = this._getChildElement();
                         D.assert(childElement1 != null);
                         this._updateParentDataOfChild(childElement1);
@@ -77,6 +81,7 @@ namespace Unity.UIWidgets.widgets {
         }
 
         ParentDataElement _getChildElement() {
+            D.assert(this.mounted);
             Element element = (Element) this.context;
             Element childElement = null;
             element.visitChildren((Element child) => { childElement = child; });
@@ -219,9 +224,9 @@ namespace Unity.UIWidgets.widgets {
         public Ticker createTicker(TickerCallback onTick) {
             this._tickers = this._tickers ?? new HashSet<Ticker>();
 
-            var debugLabel = "";
+            Func<string> debugLabel = null;
             D.assert(() => {
-                debugLabel = "created by " + this;
+                debugLabel = () => "created by " + this;
                 return true;
             });
             var result = new _AutomaticWidgetTicker<T>(onTick, this, debugLabel: debugLabel);

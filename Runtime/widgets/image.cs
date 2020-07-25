@@ -32,10 +32,12 @@ namespace Unity.UIWidgets.widgets {
 
             void listener(ImageInfo image, bool sync) {
                 completer.Resolve();
+                stream.removeListener(listener);
             }
 
             void errorListener(Exception exception) {
                 completer.Resolve();
+                stream.removeListener(listener);
                 if (onError != null) {
                     onError(exception);
                 }
@@ -50,7 +52,6 @@ namespace Unity.UIWidgets.widgets {
             }
 
             stream.addListener(listener, onError: errorListener);
-            completer.Then(() => { stream.removeListener(listener); });
             return completer;
         }
     }
@@ -68,7 +69,7 @@ namespace Unity.UIWidgets.widgets {
             ImageRepeat repeat = ImageRepeat.noRepeat,
             Rect centerSlice = null,
             bool gaplessPlayback = false,
-            FilterMode filterMode = FilterMode.Point
+            FilterMode filterMode = FilterMode.Bilinear
         ) : base(key) {
             D.assert(image != null);
             this.image = image;
@@ -97,7 +98,7 @@ namespace Unity.UIWidgets.widgets {
             ImageRepeat repeat = ImageRepeat.noRepeat,
             Rect centerSlice = null,
             bool gaplessPlayback = false,
-            FilterMode filterMode = FilterMode.Point,
+            FilterMode filterMode = FilterMode.Bilinear,
             IDictionary<string, string> headers = null
         ) {
             var networkImage = new NetworkImage(src, scale, headers);
@@ -130,7 +131,7 @@ namespace Unity.UIWidgets.widgets {
             ImageRepeat repeat = ImageRepeat.noRepeat,
             Rect centerSlice = null,
             bool gaplessPlayback = false,
-            FilterMode filterMode = FilterMode.Point
+            FilterMode filterMode = FilterMode.Bilinear
         ) {
             var fileImage = new FileImage(file, scale);
             return new Image(
@@ -163,7 +164,7 @@ namespace Unity.UIWidgets.widgets {
             ImageRepeat repeat = ImageRepeat.noRepeat,
             Rect centerSlice = null,
             bool gaplessPlayback = false,
-            FilterMode filterMode = FilterMode.Point
+            FilterMode filterMode = FilterMode.Bilinear
         ) {
             var image = scale != null
                 ? (AssetBundleImageProvider) new ExactAssetImage(name, bundle: bundle, scale: scale.Value)
@@ -198,7 +199,7 @@ namespace Unity.UIWidgets.widgets {
             ImageRepeat repeat = ImageRepeat.noRepeat,
             Rect centerSlice = null,
             bool gaplessPlayback = false,
-            FilterMode filterMode = FilterMode.Point
+            FilterMode filterMode = FilterMode.Bilinear
         ) {
             var memoryImage = new MemoryImage(bytes, scale);
             return new Image(

@@ -48,9 +48,13 @@ namespace Unity.UIWidgets.gestures {
 
         public readonly GestureArenaManager gestureArena;
 
+        public readonly PointerSignalResolver pointerSignalResolver = new PointerSignalResolver();
+
         public readonly Dictionary<int, HitTestResult> _hitTests = new Dictionary<int, HitTestResult>();
 
         public readonly HashSet<HitTestTarget> lastMoveTargets = new HashSet<HitTestTarget>();
+
+        readonly HashSet<HitTestEntry> _enteredTargets = new HashSet<HitTestEntry>();
 
         void _handlePointerEvent(PointerEvent evt) {
             if (evt is PointerScrollEvent) {
@@ -58,83 +62,59 @@ namespace Unity.UIWidgets.gestures {
                 return;
             }
 
-            if (evt is PointerHoverEvent) {
-                this._handlePointerHoverEvent(evt);
-            }
-
-            HitTestResult result;
-            if (evt is PointerDownEvent) {
+            HitTestResult hitTestResult = null;
+            if (evt is PointerDownEvent || evt is PointerSignalEvent) {
                 D.assert(!this._hitTests.ContainsKey(evt.pointer));
-                result = new HitTestResult();
-                this.hitTest(result, evt.position);
+                hitTestResult = new HitTestResult();
+                this.hitTest(hitTestResult, evt.position);
+                if (evt is PointerDownEvent) {
+                    this._hitTests[evt.pointer] = hitTestResult;
+                }
 
-                this._hitTests[evt.pointer] = result;
+                this._hitTests[evt.pointer] = hitTestResult;
                 D.assert(() => {
                     if (D.debugPrintHitTestResults) {
-                        Debug.LogFormat("{0}: {1}", evt, result);
+                        Debug.LogFormat("{0}: {1}", evt, hitTestResult);
                     }
 
                     return true;
                 });
             }
             else if (evt is PointerUpEvent || evt is PointerCancelEvent) {
-                result = this._hitTests.getOrDefault(evt.pointer);
+                hitTestResult = this._hitTests.getOrDefault(evt.pointer);
                 this._hitTests.Remove(evt.pointer);
             }
             else if (evt.down) {
-                result = this._hitTests.getOrDefault(evt.pointer);
-            }
-            else {
-                return;
+                hitTestResult = this._hitTests.getOrDefault(evt.pointer);
             }
 
-            if (result != null) {
-                this.dispatchEvent(evt, result);
+            D.assert(() => {
+                if (D.debugPrintMouseHoverEvents && evt is PointerHoverEvent) {
+                    Debug.LogFormat("{0}", evt);
+                }
+
+                return true;
+            });
+
+            if (hitTestResult != null ||
+                evt is PointerHoverEvent ||
+                evt is PointerAddedEvent ||
+                evt is PointerRemovedEvent ||
+                evt is PointerDragFromEditorHoverEvent ||
+                evt is PointerDragFromEditorReleaseEvent
+            ) {
+                this.dispatchEvent(evt, hitTestResult);
             }
         }
 
         void _handlePointerScrollEvent(PointerEvent evt) {
             this.pointerRouter.clearScrollRoute(evt.pointer);
+            if (!this.pointerRouter.acceptScroll()) {
+                return;
+            }
 
             HitTestResult result = new HitTestResult();
             this.hitTest(result, evt.position);
-
-            this.dispatchEvent(evt, result);
-        }
-
-        void _handlePointerHoverEvent(PointerEvent evt) {
-            HitTestResult result = new HitTestResult();
-            this.hitTest(result, evt.position);
-
-            // enter event
-            foreach (var hitTestEntry in result.path) {
-                if (this.lastMoveTargets.Contains(hitTestEntry.target)) {
-                    hitTestEntry.target.handleEvent(evt, hitTestEntry);
-                    this.lastMoveTargets.Remove(hitTestEntry.target);
-                }
-                else {
-                    hitTestEntry.target.handleEvent(new PointerEnterEvent(
-                        timeStamp: evt.timeStamp,
-                        pointer: evt.pointer,
-                        device: evt.device,
-                        kind: evt.kind
-                    ), hitTestEntry);
-                }
-            }
-
-            foreach (var lastMoveTarget in this.lastMoveTargets) {
-                lastMoveTarget.handleEvent(new PointerLeaveEvent(
-                    timeStamp: evt.timeStamp,
-                    pointer: evt.pointer,
-                    device: evt.device,
-                    kind: evt.kind
-                ), null);
-            }
-
-            this.lastMoveTargets.Clear();
-            foreach (var hitTestEntry in result.path) {
-                this.lastMoveTargets.Add(hitTestEntry.target);
-            }
 
             this.dispatchEvent(evt, result);
         }
@@ -143,8 +123,34 @@ namespace Unity.UIWidgets.gestures {
             result.add(new HitTestEntry(this));
         }
 
-        public void dispatchEvent(PointerEvent evt, HitTestResult result) {
-            foreach (HitTestEntry entry in result.path) {
+        public void dispatchEvent(PointerEvent evt, HitTestResult hitTestResult) {
+            if (hitTestResult == null) {
+                D.assert(evt is PointerHoverEvent ||
+                         evt is PointerAddedEvent ||
+                         evt is PointerRemovedEvent ||
+                         evt is PointerDragFromEditorHoverEvent ||
+                         evt is PointerDragFromEditorReleaseEvent
+                );
+                try {
+                    this.pointerRouter.route(evt);
+                }
+                catch (Exception ex) {
+                    UIWidgetsError.reportError(new UIWidgetsErrorDetails(
+                            exception: ex,
+                            library: "gesture library",
+                            context: "while dispatching a non-hit-tested pointer event",
+                            informationCollector: information => {
+                                information.AppendLine("Event: ");
+                                information.AppendFormat(" {0}", evt);
+                            }
+                        )
+                    );
+                }
+
+                return;
+            }
+
+            foreach (HitTestEntry entry in hitTestResult.path) {
                 try {
                     entry.target.handleEvent(evt, entry);
                 }
@@ -161,6 +167,9 @@ namespace Unity.UIWidgets.gestures {
             }
             else if (evt is PointerUpEvent) {
                 this.gestureArena.sweep(evt.pointer);
+            }
+            else if (evt is PointerSignalEvent) {
+                this.pointerSignalResolver.resolve((PointerSignalEvent) evt);
             }
         }
     }

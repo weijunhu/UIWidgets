@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 using RSG.Promises;
 using Unity.UIWidgets.animation;
 using Unity.UIWidgets.foundation;
@@ -338,8 +337,7 @@ namespace Unity.UIWidgets.material {
         }
 
         void _handleChange() {
-            this.setState(() => {
-            });
+            this.setState(() => { });
         }
 
         public override void didUpdateWidget(StatefulWidget _old) {
@@ -494,7 +492,8 @@ namespace Unity.UIWidgets.material {
             Widget suffixIcon = null,
             Widget helperError = null,
             Widget counter = null,
-            Widget container = null
+            Widget container = null,
+            bool? alignLabelWithHint = null
         ) {
             D.assert(contentPadding != null);
             this.contentPadding = contentPadding;
@@ -514,6 +513,7 @@ namespace Unity.UIWidgets.material {
             this.helperError = helperError;
             this.counter = counter;
             this.container = container;
+            this.alignLabelWithHint = alignLabelWithHint;
         }
 
         public readonly EdgeInsets contentPadding;
@@ -522,6 +522,7 @@ namespace Unity.UIWidgets.material {
         public readonly float floatingLabelProgress;
         public readonly InputBorder border;
         public readonly _InputBorderGap borderGap;
+        public readonly bool? alignLabelWithHint;
         public readonly Widget icon;
         public readonly Widget input;
         public readonly Widget label;
@@ -552,7 +553,7 @@ namespace Unity.UIWidgets.material {
                    Equals(this.prefix, other.prefix) && Equals(this.suffix, other.suffix) &&
                    Equals(this.prefixIcon, other.prefixIcon) && Equals(this.suffixIcon, other.suffixIcon) &&
                    Equals(this.helperError, other.helperError) && Equals(this.counter, other.counter) &&
-                   Equals(this.container, other.container);
+                   Equals(this.container, other.container) && Equals(this.alignLabelWithHint, other.alignLabelWithHint);
         }
 
         public override bool Equals(object obj) {
@@ -590,6 +591,8 @@ namespace Unity.UIWidgets.material {
                 hashCode = (hashCode * 397) ^ (this.helperError != null ? this.helperError.GetHashCode() : 0);
                 hashCode = (hashCode * 397) ^ (this.counter != null ? this.counter.GetHashCode() : 0);
                 hashCode = (hashCode * 397) ^ (this.container != null ? this.container.GetHashCode() : 0);
+                hashCode = (hashCode * 397) ^
+                           (this.alignLabelWithHint != null ? this.alignLabelWithHint.GetHashCode() : 0);
                 return hashCode;
             }
         }
@@ -632,14 +635,18 @@ namespace Unity.UIWidgets.material {
         public _RenderDecoration(
             _Decoration decoration,
             TextBaseline? textBaseline,
-            bool isFocused
+            bool isFocused,
+            bool expands
         ) {
             D.assert(decoration != null);
             D.assert(textBaseline != null);
             this._decoration = decoration;
             this._textBaseline = textBaseline;
             this._isFocused = isFocused;
+            this._expands = expands;
         }
+
+        public const float subtextGap = 8.0f;
 
         public readonly Dictionary<_DecorationSlot, RenderBox> slotToChild =
             new Dictionary<_DecorationSlot, RenderBox>();
@@ -831,6 +838,20 @@ namespace Unity.UIWidgets.material {
 
         bool _isFocused;
 
+        public bool expands {
+            get { return this._expands; }
+            set {
+                if (this._expands == value) {
+                    return;
+                }
+
+                this._expands = value;
+                this.markNeedsLayout();
+            }
+        }
+
+        bool _expands = false;
+
         public override void attach(object owner) {
             base.attach(owner);
             foreach (RenderBox child in this._children) {
@@ -904,41 +925,37 @@ namespace Unity.UIWidgets.material {
             get { return this.decoration.contentPadding; }
         }
 
+        float _layoutLineBox(RenderBox box, BoxConstraints constraints) {
+            if (box == null) {
+                return 0.0f;
+            }
+
+            box.layout(constraints, parentUsesSize: true);
+            float baseline = box.getDistanceToBaseline(this.textBaseline.Value).Value;
+            D.assert(baseline >= 0.0f);
+            return baseline;
+        }
+
         _RenderDecorationLayout _layout(BoxConstraints layoutConstraints) {
             Dictionary<RenderBox, float> boxToBaseline = new Dictionary<RenderBox, float>();
             BoxConstraints boxConstraints = layoutConstraints.loosen();
-            float aboveBaseline = 0.0f;
-            float belowBaseline = 0.0f;
-
-            void layoutLineBox(RenderBox box) {
-                if (box == null) {
-                    return;
-                }
-
-                box.layout(boxConstraints, parentUsesSize: true);
-                float baseline = box.getDistanceToBaseline(this.textBaseline ?? 0.0f) ?? 0.0f;
-                D.assert(baseline >= 0.0f);
-                boxToBaseline[box] = baseline;
-                aboveBaseline = Mathf.Max(baseline, aboveBaseline);
-                belowBaseline = Mathf.Max(box.size.height - baseline, belowBaseline);
+            if (this.prefix != null) {
+                boxToBaseline[this.prefix] = this._layoutLineBox(this.prefix, boxConstraints);
             }
-
-            layoutLineBox(this.prefix);
-            layoutLineBox(this.suffix);
-
+            if (this.suffix != null) {
+                boxToBaseline[this.suffix] = this._layoutLineBox(this.suffix, boxConstraints);
+            }
             if (this.icon != null) {
-                this.icon.layout(boxConstraints, parentUsesSize: true);
+                boxToBaseline[this.icon] = this._layoutLineBox(this.icon, boxConstraints);
             }
-
             if (this.prefixIcon != null) {
-                this.prefixIcon.layout(boxConstraints, parentUsesSize: true);
+                boxToBaseline[this.prefixIcon] = this._layoutLineBox(this.prefixIcon, boxConstraints);
             }
-
             if (this.suffixIcon != null) {
-                this.suffixIcon.layout(boxConstraints, parentUsesSize: true);
+                boxToBaseline[this.suffixIcon] = this._layoutLineBox(this.suffixIcon, boxConstraints);
             }
 
-            float inputWidth = Mathf.Max(0.0f, this.constraints.maxWidth - (
+            float inputWidth = Math.Max(0.0f, this.constraints.maxWidth - (
                                                   _boxSize(this.icon).width
                                                   + this.contentPadding.left
                                                   + _boxSize(this.prefixIcon).width
@@ -946,60 +963,150 @@ namespace Unity.UIWidgets.material {
                                                   + _boxSize(this.suffix).width
                                                   + _boxSize(this.suffixIcon).width
                                                   + this.contentPadding.right));
-
-            boxConstraints = boxConstraints.copyWith(maxWidth: inputWidth);
-            if (this.label != null)
-            {
-                this.label.layout(boxConstraints, parentUsesSize: true);
-            }
-
-            boxConstraints = boxConstraints.copyWith(minWidth: inputWidth);
-            layoutLineBox(this.hint);
-            layoutLineBox(this.input);
-
-            float inputBaseline = this.contentPadding.top + aboveBaseline;
-            float containerHeight = this.contentPadding.top
-                                    + aboveBaseline
-                                    + belowBaseline
-                                    + this.contentPadding.bottom;
-
             if (this.label != null) {
-                containerHeight += this.decoration.floatingLabelHeight;
-                inputBaseline += this.decoration.floatingLabelHeight;
+                boxToBaseline[this.label] = this._layoutLineBox(this.label,
+                    boxConstraints.copyWith(maxWidth: inputWidth)
+                );
             }
 
-            containerHeight = Mathf.Max(
-                containerHeight,
-                Mathf.Max(
-                    _boxSize(this.suffixIcon).height,
-                    _boxSize(this.prefixIcon).height));
+            if (this.hint != null) {
+                boxToBaseline[this.hint] = this._layoutLineBox(this.hint,
+                    boxConstraints.copyWith(minWidth: inputWidth, maxWidth: inputWidth)
+                );
+            }
 
-            float outlineBaseline = aboveBaseline +
-                                    (containerHeight - (2.0f + aboveBaseline + belowBaseline)) / 2.0f;
+            if (this.counter != null) {
+                boxToBaseline[this.counter] = this._layoutLineBox(this.counter, boxConstraints);
+            }
 
-            float subtextBaseline = 0.0f;
-            float subtextHeight = 0.0f;
-            if (this.helperError != null || this.counter != null) {
-                boxConstraints = layoutConstraints.loosen();
-                aboveBaseline = 0.0f;
-                belowBaseline = 0.0f;
-                layoutLineBox(this.counter);
-
-                boxConstraints = boxConstraints.copyWith(
-                    maxWidth: Mathf.Max(0.0f, boxConstraints.maxWidth
-                                             - _boxSize(this.icon).width
-                                             - _boxSize(this.counter).width
-                                             - this.contentPadding.horizontal
+            if (this.helperError != null) {
+                boxToBaseline[this.helperError] = this._layoutLineBox(this.helperError,
+                    boxConstraints.copyWith(
+                        maxWidth: Math.Max(0.0f, boxConstraints.maxWidth
+                                                 - _boxSize(this.icon).width
+                                                 - _boxSize(this.counter).width
+                                                 - this.contentPadding.horizontal
+                        )
                     )
                 );
-                layoutLineBox(this.helperError);
-
-                if (aboveBaseline + belowBaseline > 0.0f) {
-                    const float subtextGap = 8.0f;
-                    subtextBaseline = containerHeight + subtextGap + aboveBaseline;
-                    subtextHeight = subtextGap + aboveBaseline + belowBaseline;
-                }
             }
+
+            float labelHeight = this.label == null
+                ? 0
+                : this.decoration.floatingLabelHeight;
+            float topHeight = this.decoration.border.isOutline
+                ? Math.Max(labelHeight - boxToBaseline.getOrDefault(this.label, 0), 0)
+                : labelHeight;
+            float counterHeight = this.counter == null
+                ? 0
+                : boxToBaseline.getOrDefault(this.counter, 0) + subtextGap;
+            bool helperErrorExists = this.helperError?.size != null
+                                     && this.helperError.size.height > 0;
+            float helperErrorHeight = !helperErrorExists
+                ? 0
+                : this.helperError.size.height + subtextGap;
+            float bottomHeight = Math.Max(
+                counterHeight,
+                helperErrorHeight
+            );
+            if (this.input != null) {
+                boxToBaseline[this.input] = this._layoutLineBox(this.input,
+                    boxConstraints.deflate(EdgeInsets.only(
+                        top: this.contentPadding.top + topHeight,
+                        bottom: this.contentPadding.bottom + bottomHeight
+                    )).copyWith(
+                        minWidth: inputWidth,
+                        maxWidth: inputWidth
+                    )
+                );
+            }
+
+            // The field can be occupied by a hint or by the input itself
+            float hintHeight = this.hint == null ? 0 : this.hint.size.height;
+            float inputDirectHeight = this.input == null ? 0 : this.input.size.height;
+            float inputHeight = Math.Max(hintHeight, inputDirectHeight);
+            float inputInternalBaseline = Math.Max(
+                boxToBaseline.getOrDefault(this.input, 0.0f),
+                boxToBaseline.getOrDefault(this.hint, 0.0f)
+            );
+
+            // Calculate the amount that prefix/suffix affects height above and below
+            // the input.
+            float prefixHeight = this.prefix == null ? 0 : this.prefix.size.height;
+            float suffixHeight = this.suffix == null ? 0 : this.suffix.size.height;
+            float fixHeight = Math.Max(
+                boxToBaseline.getOrDefault(this.prefix, 0.0f),
+                boxToBaseline.getOrDefault(this.suffix, 0.0f)
+            );
+            float fixAboveInput = Math.Max(0, fixHeight - inputInternalBaseline);
+            float fixBelowBaseline = Math.Max(
+                prefixHeight - boxToBaseline.getOrDefault(this.prefix, 0.0f),
+                suffixHeight - boxToBaseline.getOrDefault(this.suffix, 0.0f)
+            );
+            float fixBelowInput = Math.Max(
+                0,
+                fixBelowBaseline - (inputHeight - inputInternalBaseline)
+            );
+
+            // Calculate the height of the input text container.
+            float prefixIconHeight = this.prefixIcon == null ? 0 : this.prefixIcon.size.height;
+            float suffixIconHeight = this.suffixIcon == null ? 0 : this.suffixIcon.size.height;
+            float fixIconHeight = Math.Max(prefixIconHeight, suffixIconHeight);
+            float contentHeight = Math.Max(
+                fixIconHeight,
+                topHeight
+                + this.contentPadding.top
+                + fixAboveInput
+                + inputHeight
+                + fixBelowInput
+                + this.contentPadding.bottom
+            );
+            float maxContainerHeight = boxConstraints.maxHeight - bottomHeight;
+            float containerHeight = this.expands
+                ? maxContainerHeight
+                : Math.Min(contentHeight, maxContainerHeight);
+
+            // Always position the prefix/suffix in the same place (baseline).
+            float overflow = Math.Max(0, contentHeight - maxContainerHeight);
+            float baselineAdjustment = fixAboveInput - overflow;
+
+            // The baselines that will be used to draw the actual input text content.
+            float inputBaseline = this.contentPadding.top
+                                  + topHeight
+                                  + inputInternalBaseline
+                                  + baselineAdjustment;
+            // The text in the input when an outline border is present is centered
+            // within the container less 2.0 dps at the top to account for the vertical
+            // space occupied by the floating label.
+            float outlineBaseline = inputInternalBaseline
+                                    + baselineAdjustment / 2
+                                    + (containerHeight - (2.0f + inputHeight)) / 2.0f;
+
+            // Find the positions of the text below the input when it exists.
+            float subtextCounterBaseline = 0;
+            float subtextHelperBaseline = 0;
+            float subtextCounterHeight = 0;
+            float subtextHelperHeight = 0;
+            if (this.counter != null) {
+                subtextCounterBaseline =
+                    containerHeight + subtextGap + boxToBaseline.getOrDefault(this.counter, 0.0f);
+                subtextCounterHeight = this.counter.size.height + subtextGap;
+            }
+
+            if (helperErrorExists) {
+                subtextHelperBaseline =
+                    containerHeight + subtextGap + boxToBaseline.getOrDefault(this.helperError, 0.0f);
+                subtextHelperHeight = helperErrorHeight;
+            }
+
+            float subtextBaseline = Math.Max(
+                subtextCounterBaseline,
+                subtextHelperBaseline
+            );
+            float subtextHeight = Math.Max(
+                subtextCounterHeight,
+                subtextHelperHeight
+            );
 
             return new _RenderDecorationLayout(
                 boxToBaseline: boxToBaseline,
@@ -1049,7 +1156,7 @@ namespace Unity.UIWidgets.material {
         protected override float computeMinIntrinsicHeight(float width) {
             float subtextHeight = this._lineHeight(width, new List<RenderBox> {this.helperError, this.counter});
             if (subtextHeight > 0.0f) {
-                subtextHeight += 8.0f;
+                subtextHeight += subtextGap;
             }
 
             return this.contentPadding.top
@@ -1059,13 +1166,12 @@ namespace Unity.UIWidgets.material {
                    + this.contentPadding.bottom;
         }
 
-        protected override float computeMaxIntrinsicHeight(float width) {
+        protected internal override float computeMaxIntrinsicHeight(float width) {
             return this.computeMinIntrinsicHeight(width);
         }
 
         protected override float? computeDistanceToActualBaseline(TextBaseline baseline) {
-            D.assert(false, "not implemented");
-            return 0.0f;
+            return _boxParentData(this.input).offset.dy + this.input.getDistanceToActualBaseline(baseline);
         }
 
         Matrix3 _labelTransform;
@@ -1123,7 +1229,12 @@ namespace Unity.UIWidgets.material {
             }
 
             if (this.label != null) {
-                centerLayout(this.label, start);
+                if (this.decoration.alignLabelWithHint == true) {
+                    baselineLayout(this.label, start);
+                }
+                else {
+                    centerLayout(this.label, start);
+                }
             }
 
             if (this.prefix != null) {
@@ -1158,7 +1269,6 @@ namespace Unity.UIWidgets.material {
                 if (this.counter != null) {
                     baselineLayout(this.counter, right - this.counter.size.width);
                 }
-
             }
 
             if (this.label != null) {
@@ -1385,7 +1495,7 @@ namespace Unity.UIWidgets.material {
         }
 
         protected override void moveChildRenderObject(RenderObject child, object slotValue) {
-            D.assert(false, "not reachable");
+            D.assert(false, () => "not reachable");
         }
     }
 
@@ -1394,18 +1504,22 @@ namespace Unity.UIWidgets.material {
             Key key = null,
             _Decoration decoration = null,
             TextBaseline? textBaseline = null,
-            bool isFocused = false
+            bool isFocused = false,
+            bool? expands = null
         ) : base(key: key) {
             D.assert(decoration != null);
             D.assert(textBaseline != null);
+            D.assert(expands != null);
             this.decoration = decoration;
             this.textBaseline = textBaseline;
             this.isFocused = isFocused;
+            this.expands = expands.Value;
         }
 
         public readonly _Decoration decoration;
         public readonly TextBaseline? textBaseline;
         public readonly bool isFocused;
+        public readonly bool expands;
 
         public override Element createElement() {
             return new _RenderDecorationElement(this);
@@ -1415,7 +1529,8 @@ namespace Unity.UIWidgets.material {
             return new _RenderDecoration(
                 decoration: this.decoration,
                 textBaseline: this.textBaseline,
-                isFocused: this.isFocused
+                isFocused: this.isFocused,
+                expands: this.expands
             );
         }
 
@@ -1424,6 +1539,7 @@ namespace Unity.UIWidgets.material {
             renderObject.decoration = this.decoration;
             renderObject.textBaseline = this.textBaseline;
             renderObject.isFocused = this.isFocused;
+            renderObject.expands = this.expands;
         }
     }
 
@@ -1465,6 +1581,7 @@ namespace Unity.UIWidgets.material {
             TextStyle baseStyle = null,
             TextAlign? textAlign = null,
             bool isFocused = false,
+            bool expands = false,
             bool isEmpty = false,
             Widget child = null
         ) : base(key: key) {
@@ -1472,6 +1589,7 @@ namespace Unity.UIWidgets.material {
             this.baseStyle = baseStyle;
             this.textAlign = textAlign;
             this.isFocused = isFocused;
+            this.expands = expands;
             this.isEmpty = isEmpty;
             this.child = child;
         }
@@ -1483,6 +1601,8 @@ namespace Unity.UIWidgets.material {
         public readonly TextAlign? textAlign;
 
         public readonly bool isFocused;
+        
+        public readonly bool expands;
 
         public readonly bool isEmpty;
 
@@ -1507,6 +1627,7 @@ namespace Unity.UIWidgets.material {
             properties.add(new DiagnosticsProperty<InputDecoration>("decoration", this.decoration));
             properties.add(new DiagnosticsProperty<TextStyle>("baseStyle", this.baseStyle, defaultValue: null));
             properties.add(new DiagnosticsProperty<bool>("isFocused", this.isFocused));
+            properties.add(new DiagnosticsProperty<bool>("expands", this.expands));
             properties.add(new DiagnosticsProperty<bool>("isEmpty", this.isEmpty));
         }
     }
@@ -1545,8 +1666,7 @@ namespace Unity.UIWidgets.material {
         }
 
         void _handleChange() {
-            this.setState(() => {
-            });
+            this.setState(() => { });
         }
 
         InputDecoration _effectiveDecoration;
@@ -1612,8 +1732,7 @@ namespace Unity.UIWidgets.material {
         }
 
         Color _getFillColor(ThemeData themeData) {
-            if (this.decoration.filled != true)
-            {
+            if (this.decoration.filled != true) {
                 return Colors.transparent;
             }
 
@@ -1730,7 +1849,8 @@ namespace Unity.UIWidgets.material {
                     child: new Text(this.decoration.hintText,
                         style: hintStyle,
                         overflow: TextOverflow.ellipsis,
-                        textAlign: this.textAlign
+                        textAlign: this.textAlign,
+                        maxLines: this.decoration.hintMaxLines
                     )
                 );
 
@@ -1857,12 +1977,16 @@ namespace Unity.UIWidgets.material {
                 errorMaxLines: this.decoration.errorMaxLines
             );
 
-            Widget counter = this.decoration.counterText == null
-                ? null
-                : new Text(this.decoration.counterText,
+            Widget counter = null;
+            if (this.decoration.counter != null) {
+                counter = this.decoration.counter;
+            }
+            else if (this.decoration.counterText != null && this.decoration.counterText != "") {
+                counter = new Text(this.decoration.counterText,
                     style: this._getHelperStyle(themeData).merge(this.decoration.counterStyle),
                     overflow: TextOverflow.ellipsis
                 );
+            }
 
             EdgeInsets decorationContentPadding = this.decoration.contentPadding;
             EdgeInsets contentPadding;
@@ -1903,6 +2027,7 @@ namespace Unity.UIWidgets.material {
                     icon: icon,
                     input: this.widget.child,
                     label: label,
+                    alignLabelWithHint: this.decoration.alignLabelWithHint,
                     hint: hint,
                     prefix: prefix,
                     suffix: suffix,
@@ -1913,7 +2038,8 @@ namespace Unity.UIWidgets.material {
                     container: container
                 ),
                 textBaseline: textBaseline,
-                isFocused: this.isFocused
+                isFocused: this.isFocused,
+                expands: this.widget.expands
             );
         }
     }
@@ -1927,6 +2053,7 @@ namespace Unity.UIWidgets.material {
             TextStyle helperStyle = null,
             string hintText = null,
             TextStyle hintStyle = null,
+            int? hintMaxLines = null,
             string errorText = null,
             TextStyle errorStyle = null,
             int? errorMaxLines = null,
@@ -1941,6 +2068,7 @@ namespace Unity.UIWidgets.material {
             Widget suffix = null,
             string suffixText = null,
             TextStyle suffixStyle = null,
+            Widget counter = null,
             string counterText = null,
             TextStyle counterStyle = null,
             bool? filled = null,
@@ -1951,11 +2079,14 @@ namespace Unity.UIWidgets.material {
             InputBorder disabledBorder = null,
             InputBorder enabledBorder = null,
             InputBorder border = null,
-            bool? enabled = true
+            bool? enabled = true,
+            bool? alignLabelWithHint = null
         ) {
             D.assert(enabled != null);
-            D.assert(!(prefix != null && prefixText != null), "Declaring both prefix and prefixText is not allowed");
-            D.assert(!(suffix != null && suffixText != null), "Declaring both suffix and suffixText is not allowed");
+            D.assert(!(prefix != null && prefixText != null),
+                () => "Declaring both prefix and prefixText is not supported");
+            D.assert(!(suffix != null && suffixText != null),
+                () => "Declaring both suffix and suffixText is not supported");
             this.isCollapsed = false;
             this.icon = icon;
             this.labelText = labelText;
@@ -1964,16 +2095,22 @@ namespace Unity.UIWidgets.material {
             this.helperStyle = helperStyle;
             this.hintText = hintText;
             this.hintStyle = hintStyle;
+            this.hintMaxLines = hintMaxLines;
             this.errorText = errorText;
             this.errorStyle = errorStyle;
             this.errorMaxLines = errorMaxLines;
             this.hasFloatingPlaceholder = hasFloatingPlaceholder;
             this.isDense = isDense;
             this.contentPadding = contentPadding;
+            this.prefix = prefix;
+            this.prefixText = prefixText;
             this.prefixIcon = prefixIcon;
             this.prefixStyle = prefixStyle;
+            this.suffix = suffix;
+            this.suffixText = suffixText;
             this.suffixIcon = suffixIcon;
             this.suffixStyle = suffixStyle;
+            this.counter = counter;
             this.counterText = counterText;
             this.counterStyle = counterStyle;
             this.filled = filled;
@@ -1985,6 +2122,7 @@ namespace Unity.UIWidgets.material {
             this.enabledBorder = enabledBorder;
             this.border = border;
             this.enabled = enabled;
+            this.alignLabelWithHint = alignLabelWithHint;
         }
 
         public static InputDecoration collapsed(
@@ -2003,6 +2141,7 @@ namespace Unity.UIWidgets.material {
                 labelStyle: null,
                 helperText: null,
                 helperStyle: null,
+                hintMaxLines: null,
                 errorText: null,
                 errorStyle: null,
                 errorMaxLines: null,
@@ -2016,6 +2155,7 @@ namespace Unity.UIWidgets.material {
                 suffixIcon: null,
                 suffixText: null,
                 suffixStyle: null,
+                counter: null,
                 counterText: null,
                 counterStyle: null,
                 errorBorder: null,
@@ -2029,7 +2169,8 @@ namespace Unity.UIWidgets.material {
                 filled: filled,
                 fillColor: fillColor,
                 border: border,
-                enabled: enabled
+                enabled: enabled,
+                alignLabelWithHint: false
             );
             decoration.isCollapsed = true;
             return decoration;
@@ -2048,6 +2189,8 @@ namespace Unity.UIWidgets.material {
         public readonly string hintText;
 
         public readonly TextStyle hintStyle;
+
+        public readonly int? hintMaxLines;
 
         public readonly string errorText;
 
@@ -2079,6 +2222,8 @@ namespace Unity.UIWidgets.material {
 
         public readonly TextStyle suffixStyle;
 
+        public readonly Widget counter;
+
         public readonly string counterText;
 
         public readonly TextStyle counterStyle;
@@ -2101,6 +2246,8 @@ namespace Unity.UIWidgets.material {
 
         public readonly bool? enabled;
 
+        public readonly bool? alignLabelWithHint;
+
         public InputDecoration copyWith(
             Widget icon = null,
             string labelText = null,
@@ -2109,6 +2256,7 @@ namespace Unity.UIWidgets.material {
             TextStyle helperStyle = null,
             string hintText = null,
             TextStyle hintStyle = null,
+            int? hintMaxLines = null,
             string errorText = null,
             TextStyle errorStyle = null,
             int? errorMaxLines = null,
@@ -2123,6 +2271,7 @@ namespace Unity.UIWidgets.material {
             Widget suffix = null,
             string suffixText = null,
             TextStyle suffixStyle = null,
+            Widget counter = null,
             string counterText = null,
             TextStyle counterStyle = null,
             bool? filled = null,
@@ -2133,7 +2282,8 @@ namespace Unity.UIWidgets.material {
             InputBorder disabledBorder = null,
             InputBorder enabledBorder = null,
             InputBorder border = null,
-            bool? enabled = null
+            bool? enabled = null,
+            bool? alignLabelWithHint = null
         ) {
             return new InputDecoration(
                 icon: icon ?? this.icon,
@@ -2143,6 +2293,7 @@ namespace Unity.UIWidgets.material {
                 helperStyle: helperStyle ?? this.helperStyle,
                 hintText: hintText ?? this.hintText,
                 hintStyle: hintStyle ?? this.hintStyle,
+                hintMaxLines: hintMaxLines ?? this.hintMaxLines,
                 errorText: errorText ?? this.errorText,
                 errorStyle: errorStyle ?? this.errorStyle,
                 errorMaxLines: errorMaxLines ?? this.errorMaxLines,
@@ -2157,6 +2308,7 @@ namespace Unity.UIWidgets.material {
                 suffix: suffix ?? this.suffix,
                 suffixText: suffixText ?? this.suffixText,
                 suffixStyle: suffixStyle ?? this.suffixStyle,
+                counter: counter ?? this.counter,
                 counterText: counterText ?? this.counterText,
                 counterStyle: counterStyle ?? this.counterStyle,
                 filled: filled ?? this.filled,
@@ -2167,7 +2319,8 @@ namespace Unity.UIWidgets.material {
                 disabledBorder: disabledBorder ?? this.disabledBorder,
                 enabledBorder: enabledBorder ?? this.enabledBorder,
                 border: border ?? this.border,
-                enabled: enabled ?? this.enabled
+                enabled: enabled ?? this.enabled,
+                alignLabelWithHint: alignLabelWithHint ?? this.alignLabelWithHint
             );
         }
 
@@ -2191,7 +2344,8 @@ namespace Unity.UIWidgets.material {
                 focusedErrorBorder: this.focusedErrorBorder ?? theme.focusedErrorBorder,
                 disabledBorder: this.disabledBorder ?? theme.disabledBorder,
                 enabledBorder: this.enabledBorder ?? theme.enabledBorder,
-                border: this.border ?? theme.border
+                border: this.border ?? theme.border,
+                alignLabelWithHint: this.alignLabelWithHint ?? theme.alignLabelWithHint
             );
         }
 
@@ -2204,51 +2358,57 @@ namespace Unity.UIWidgets.material {
         }
 
         public bool Equals(InputDecoration other) {
-            return other.icon == this.icon
-                   && other.labelText == this.labelText
-                   && other.labelStyle == this.labelStyle
-                   && other.helperText == this.helperText
-                   && other.helperStyle == this.helperStyle
-                   && other.hintText == this.hintText
-                   && other.hintStyle == this.hintStyle
-                   && other.errorText == this.errorText
-                   && other.errorStyle == this.errorStyle
-                   && other.errorMaxLines == this.errorMaxLines
-                   && other.hasFloatingPlaceholder == this.hasFloatingPlaceholder
-                   && other.isDense == this.isDense
-                   && other.contentPadding == this.contentPadding
-                   && other.isCollapsed == this.isCollapsed
-                   && other.prefixIcon == this.prefixIcon
-                   && other.prefix == this.prefix
-                   && other.prefixText == this.prefixText
-                   && other.prefixStyle == this.prefixStyle
-                   && other.suffixIcon == this.suffixIcon
-                   && other.suffix == this.suffix
-                   && other.suffixText == this.suffixText
-                   && other.suffixStyle == this.suffixStyle
-                   && other.counterText == this.counterText
-                   && other.counterStyle == this.counterStyle
-                   && other.filled == this.filled
-                   && other.fillColor == this.fillColor
-                   && other.errorBorder == this.errorBorder
-                   && other.focusedBorder == this.focusedBorder
-                   && other.focusedErrorBorder == this.focusedErrorBorder
-                   && other.disabledBorder == this.disabledBorder
-                   && other.enabledBorder == this.enabledBorder
-                   && other.border == this.border
-                   && other.enabled == this.enabled;
+            return Equals(other.icon, this.icon)
+                   && Equals(other.labelText, this.labelText)
+                   && Equals(other.labelStyle, this.labelStyle)
+                   && Equals(other.helperText, this.helperText)
+                   && Equals(other.helperStyle, this.helperStyle)
+                   && Equals(other.hintText, this.hintText)
+                   && Equals(other.hintStyle, this.hintStyle)
+                   && Equals(other.hintMaxLines, this.hintMaxLines)
+                   && Equals(other.errorText, this.errorText)
+                   && Equals(other.errorStyle, this.errorStyle)
+                   && Equals(other.errorMaxLines, this.errorMaxLines)
+                   && Equals(other.hasFloatingPlaceholder, this.hasFloatingPlaceholder)
+                   && Equals(other.isDense, this.isDense)
+                   && Equals(other.contentPadding, this.contentPadding)
+                   && Equals(other.isCollapsed, this.isCollapsed)
+                   && Equals(other.prefixIcon, this.prefixIcon)
+                   && Equals(other.prefix, this.prefix)
+                   && Equals(other.prefixText, this.prefixText)
+                   && Equals(other.prefixStyle, this.prefixStyle)
+                   && Equals(other.suffixIcon, this.suffixIcon)
+                   && Equals(other.suffix, this.suffix)
+                   && Equals(other.suffixText, this.suffixText)
+                   && Equals(other.suffixStyle, this.suffixStyle)
+                   && Equals(other.counter, this.counter)
+                   && Equals(other.counterText, this.counterText)
+                   && Equals(other.counterStyle, this.counterStyle)
+                   && Equals(other.filled, this.filled)
+                   && Equals(other.fillColor, this.fillColor)
+                   && Equals(other.errorBorder, this.errorBorder)
+                   && Equals(other.focusedBorder, this.focusedBorder)
+                   && Equals(other.focusedErrorBorder, this.focusedErrorBorder)
+                   && Equals(other.disabledBorder, this.disabledBorder)
+                   && Equals(other.enabledBorder, this.enabledBorder)
+                   && Equals(other.border, this.border)
+                   && Equals(other.enabled, this.enabled)
+                   && Equals(other.alignLabelWithHint, this.alignLabelWithHint);
         }
-        
+
         public override bool Equals(object obj) {
             if (ReferenceEquals(null, obj)) {
                 return false;
             }
+
             if (ReferenceEquals(this, obj)) {
                 return true;
             }
+
             if (obj.GetType() != this.GetType()) {
                 return false;
             }
+
             return this.Equals((InputDecoration) obj);
         }
 
@@ -2261,6 +2421,7 @@ namespace Unity.UIWidgets.material {
                 hashCode = (hashCode * 397) ^ this.helperStyle.GetHashCode();
                 hashCode = (hashCode * 397) ^ this.hintText.GetHashCode();
                 hashCode = (hashCode * 397) ^ this.hintStyle.GetHashCode();
+                hashCode = (hashCode * 397) ^ this.hintMaxLines.GetHashCode();
                 hashCode = (hashCode * 397) ^ this.errorText.GetHashCode();
                 hashCode = (hashCode * 397) ^ this.errorStyle.GetHashCode();
                 hashCode = (hashCode * 397) ^ this.errorMaxLines.GetHashCode();
@@ -2280,6 +2441,7 @@ namespace Unity.UIWidgets.material {
                 hashCode = (hashCode * 397) ^ this.suffix.GetHashCode();
                 hashCode = (hashCode * 397) ^ this.suffixText.GetHashCode();
                 hashCode = (hashCode * 397) ^ this.suffixStyle.GetHashCode();
+                hashCode = (hashCode * 397) ^ this.counter.GetHashCode();
                 hashCode = (hashCode * 397) ^ this.counterText.GetHashCode();
                 hashCode = (hashCode * 397) ^ this.counterStyle.GetHashCode();
                 hashCode = (hashCode * 397) ^ this.filled.GetHashCode();
@@ -2291,6 +2453,7 @@ namespace Unity.UIWidgets.material {
                 hashCode = (hashCode * 397) ^ this.enabledBorder.GetHashCode();
                 hashCode = (hashCode * 397) ^ this.border.GetHashCode();
                 hashCode = (hashCode * 397) ^ this.enabled.GetHashCode();
+                hashCode = (hashCode * 397) ^ this.alignLabelWithHint.GetHashCode();
                 return hashCode;
             }
         }
@@ -2307,6 +2470,10 @@ namespace Unity.UIWidgets.material {
 
             if (this.helperText != null) {
                 description.Add($"helperText: ${this.helperText}");
+            }
+
+            if (this.hintMaxLines != null) {
+                description.Add($"hintMaxLines: ${this.hintMaxLines}");
             }
 
             if (this.hintText != null) {
@@ -2373,6 +2540,10 @@ namespace Unity.UIWidgets.material {
                 description.Add($"suffixStyle: ${this.suffixStyle}");
             }
 
+            if (this.counter != null) {
+                description.Add($"counter: ${this.counter}");
+            }
+
             if (this.counterText != null) {
                 description.Add($"counterText: ${this.counterText}");
             }
@@ -2417,6 +2588,10 @@ namespace Unity.UIWidgets.material {
                 description.Add("enabled: false");
             }
 
+            if (this.alignLabelWithHint != null) {
+                description.Add($"alignLabelWithHint: {this.alignLabelWithHint}");
+            }
+
             return $"InputDecoration(${string.Join(", ", description)})";
         }
     }
@@ -2442,7 +2617,8 @@ namespace Unity.UIWidgets.material {
             InputBorder focusedErrorBorder = null,
             InputBorder disabledBorder = null,
             InputBorder enabledBorder = null,
-            InputBorder border = null
+            InputBorder border = null,
+            bool alignLabelWithHint = false
         ) {
             D.assert(isDense != null);
             D.assert(isCollapsed != null);
@@ -2467,6 +2643,7 @@ namespace Unity.UIWidgets.material {
             this.disabledBorder = disabledBorder;
             this.enabledBorder = enabledBorder;
             this.border = border;
+            this.alignLabelWithHint = alignLabelWithHint;
         }
 
         public readonly TextStyle labelStyle;
@@ -2509,6 +2686,8 @@ namespace Unity.UIWidgets.material {
 
         public readonly InputBorder border;
 
+        public readonly bool alignLabelWithHint;
+
         public override void debugFillProperties(DiagnosticPropertiesBuilder properties) {
             base.debugFillProperties(properties);
             InputDecorationTheme defaultTheme = new InputDecorationTheme();
@@ -2542,7 +2721,7 @@ namespace Unity.UIWidgets.material {
                 defaultValue: defaultTheme.errorBorder));
             properties.add(new DiagnosticsProperty<InputBorder>("focusedBorder", this.focusedBorder,
                 defaultValue: defaultTheme.focusedErrorBorder));
-            properties.add(new DiagnosticsProperty<InputBorder>("focusedErrorborder", this.focusedErrorBorder,
+            properties.add(new DiagnosticsProperty<InputBorder>("focusedErrorBorder", this.focusedErrorBorder,
                 defaultValue: defaultTheme.focusedErrorBorder));
             properties.add(new DiagnosticsProperty<InputBorder>("disabledBorder", this.disabledBorder,
                 defaultValue: defaultTheme.disabledBorder));
@@ -2550,6 +2729,8 @@ namespace Unity.UIWidgets.material {
                 defaultValue: defaultTheme.enabledBorder));
             properties.add(
                 new DiagnosticsProperty<InputBorder>("border", this.border, defaultValue: defaultTheme.border));
+            properties.add(new DiagnosticsProperty<bool>("alignLabelWithHint", this.alignLabelWithHint,
+                defaultValue: defaultTheme.alignLabelWithHint));
         }
     }
 }

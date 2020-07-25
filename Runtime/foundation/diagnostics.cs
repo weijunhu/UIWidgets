@@ -242,7 +242,7 @@ namespace Unity.UIWidgets.foundation {
             bool showSeparator = true
         ) {
             D.assert(name == null || !name.EndsWith(":"),
-                "Names of diagnostic nodes must not end with colons.");
+                () => "Names of diagnostic nodes must not end with colons.");
             this.name = name;
             this._style = style;
             this._showName = showName;
@@ -1421,7 +1421,13 @@ namespace Unity.UIWidgets.foundation {
         }
 
         public virtual string toString(DiagnosticLevel minLevel = DiagnosticLevel.debug) {
-            return this.toDiagnosticsNode(style: DiagnosticsTreeStyle.singleLine).toString(minLevel: minLevel);
+            string fullString = null;
+            D.assert(() => {
+                fullString = this.toDiagnosticsNode(style: DiagnosticsTreeStyle.singleLine)
+                    .toString(minLevel: minLevel);
+                return true;
+            });
+            return fullString ?? this.toStringShort();
         }
 
         public virtual DiagnosticsNode toDiagnosticsNode(

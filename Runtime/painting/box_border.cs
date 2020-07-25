@@ -22,13 +22,18 @@ namespace Unity.UIWidgets.painting {
             this.left = left ?? BorderSide.none;
         }
 
+        public static Border fromBorderSide(BorderSide side) {
+            D.assert(side != null);
+            return new Border(top: side, right: side, bottom: side, left: side);
+        }
+
         public static Border all(
             Color color = null,
             float width = 1.0f,
             BorderStyle style = BorderStyle.solid
         ) {
             BorderSide side = new BorderSide(color: color, width: width, style: style);
-            return new Border(top: side, right: side, bottom: side, left: side);
+            return Border.fromBorderSide(side);
         }
 
         public static Border merge(Border a, Border b) {
@@ -169,7 +174,7 @@ namespace Unity.UIWidgets.painting {
                         switch (shape) {
                             case BoxShape.circle:
                                 D.assert(borderRadius == null,
-                                    "A borderRadius can only be given for rectangular boxes.");
+                                    () => "A borderRadius can only be given for rectangular boxes.");
                                 _paintUniformBorderWithCircle(canvas, rect, this.top);
                                 break;
                             case BoxShape.rectangle:
@@ -187,8 +192,8 @@ namespace Unity.UIWidgets.painting {
                 }
             }
 
-            D.assert(borderRadius == null, "A borderRadius can only be given for uniform borders.");
-            D.assert(shape == BoxShape.rectangle, "A border can only be drawn as a circle if it is uniform.");
+            D.assert(borderRadius == null, () => "A borderRadius can only be given for uniform borders.");
+            D.assert(shape == BoxShape.rectangle, () => "A border can only be drawn as a circle if it is uniform.");
 
             BorderUtils.paintBorder(canvas, rect,
                 top: this.top, right: this.right, bottom: this.bottom, left: this.left);

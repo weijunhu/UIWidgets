@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using Unity.UIWidgets.foundation;
 using Unity.UIWidgets.gestures;
 using Unity.UIWidgets.painting;
@@ -268,7 +267,7 @@ namespace Unity.UIWidgets.rendering {
             D.assert(rows == null || rows >= 0);
             D.assert(rows == null || children == null);
 
-            this._columns = columns ?? (children != null && children.isNotEmpty() ? children.First().Count : 0);
+            this._columns = columns ?? (children != null && children.isNotEmpty() ? children[0].Count : 0);
             this._rows = rows ?? 0;
             this._children = new List<RenderBox>();
             for (int i = 0; i < this._columns * this._rows; i++) {
@@ -588,7 +587,7 @@ namespace Unity.UIWidgets.rendering {
             }
 
             this._children.Clear();
-            this._columns = cells.isNotEmpty() ? cells.First().Count : 0;
+            this._columns = cells.isNotEmpty() ? cells[0].Count : 0;
             this._rows = 0;
             foreach (List<RenderBox> row in cells) {
                 this.addRow(row);
@@ -709,7 +708,7 @@ namespace Unity.UIWidgets.rendering {
             return rowTop;
         }
 
-        protected override float computeMaxIntrinsicHeight(float width) {
+        protected internal override float computeMaxIntrinsicHeight(float width) {
             return this.computeMinIntrinsicHeight(width);
         }
 
@@ -842,11 +841,17 @@ namespace Unity.UIWidgets.rendering {
                 float deficit = tableWidth - maxWidthConstraint;
 
                 int availableColumns = this.columns;
-                while (deficit > 0.0f && totalFlex > 0.0f) {
+                
+                //(Xingwei Zhu) this deficit is double and set to be 0.00000001f in flutter.
+                //since we use float by default, making it larger should make sense in most cases
+                float minimumDeficit = 0.0001f;
+                while (deficit > minimumDeficit && totalFlex > minimumDeficit) {
                     float newTotalFlex = 0.0f;
                     for (int x = 0; x < this.columns; x++) {
                         if (flexes[x] != null) {
-                            float newWidth = widths[x] - deficit * flexes[x].Value / totalFlex;
+                            //(Xingwei Zhu) in case deficit * flexes[x].Value / totalFlex => 0 if deficit is really small, leading to dead loop,
+                            //we amend it with a default larger value to ensure that this loop will eventually end
+                            float newWidth = widths[x] - Mathf.Max(minimumDeficit, deficit * flexes[x].Value / totalFlex);
                             D.assert(newWidth.isFinite());
                             if (newWidth <= minWidths[x]) {
                                 deficit -= widths[x] - minWidths[x];
@@ -922,7 +927,7 @@ namespace Unity.UIWidgets.rendering {
             }
 
             this._columnLefts = positions;
-            tableWidth = positions.Last() + widths.Last();
+            tableWidth = positions[positions.Count - 1] + widths[widths.Count - 1];
 
             this._rowTops.Clear();
             this._baselineDistance = null;
@@ -1093,7 +1098,7 @@ namespace Unity.UIWidgets.rendering {
             D.assert(this._rows == this._rowTops.Count - 1);
             D.assert(this._columns == this._columnLefts.Count);
             if (this.border != null) {
-                Rect borderRect = Rect.fromLTWH(offset.dx, offset.dy, this.size.width, this._rowTops.Last());
+                Rect borderRect = Rect.fromLTWH(offset.dx, offset.dy, this.size.width, this._rowTops[this._rowTops.Count - 1]);
                 List<float> rows = this._rowTops.GetRange(1, this._rowTops.Count - 2);
                 List<float> columns = this._columnLefts.GetRange(1, this._columnLefts.Count - 1);
                 this.border.paint(context.canvas, borderRect, rows: rows, columns: columns);

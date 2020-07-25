@@ -541,6 +541,14 @@ namespace Unity.UIWidgets.ui {
             get { return new Size(this.width, this.height); }
         }
 
+        public float area {
+            get { return this.width * this.height; }
+        }
+
+        public float margin {
+            get { return this.width + this.height; }
+        }
+
         public static readonly Rect zero = new Rect(0, 0, 0, 0);
 
         public static readonly Rect one = new Rect(0, 0, 1, 1);
@@ -716,7 +724,15 @@ namespace Unity.UIWidgets.ui {
                 Mathf.Ceil(this.right), Mathf.Ceil(this.bottom));
         }
 
-        public Rect roundOut(float devicePixelRatio) {
+        public Rect roundOutScale(float scale) {
+            return fromLTRB(
+                Mathf.Floor(this.left * scale), 
+                Mathf.Floor(this.top * scale),
+                Mathf.Ceil(this.right * scale), 
+                Mathf.Ceil(this.bottom * scale));
+        }
+        
+        public Rect withDevicePixelRatio(float devicePixelRatio) {
             return fromLTRB(
                 Mathf.Floor(this.left * devicePixelRatio) / devicePixelRatio, 
                 Mathf.Floor(this.top * devicePixelRatio) / devicePixelRatio,

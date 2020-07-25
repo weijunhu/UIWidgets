@@ -146,6 +146,32 @@ namespace Unity.UIWidgets.material {
 
         public readonly bool selected;
 
+        public static IEnumerable<Widget> divideTiles(BuildContext context = null, IEnumerable<Widget> tiles = null,
+            Color color = null) {
+            D.assert(tiles != null);
+            D.assert(color != null || context != null);
+
+            IEnumerator<Widget> enumerator = tiles.GetEnumerator();
+            List<Widget> result = new List<Widget> { };
+
+            Decoration decoration = new BoxDecoration(
+                border: new Border(
+                    bottom: Divider.createBorderSide(context, color: color)
+                )
+            );
+
+            Widget tile = enumerator.Current;
+            while (enumerator.MoveNext()) {
+                result.Add(new DecoratedBox(
+                    position: DecorationPosition.foreground,
+                    decoration: decoration,
+                    child: tile
+                ));
+                tile = enumerator.Current;
+            }
+
+            return result;
+        }
 
         Color _iconColor(ThemeData theme, ListTileTheme tileTheme) {
             if (!this.enabled) {
@@ -477,7 +503,7 @@ namespace Unity.UIWidgets.material {
         }
 
         protected override void moveChildRenderObject(RenderObject child, object slotValue) {
-            D.assert(false, "not reachable");
+            D.assert(false, () => "not reachable");
         }
     }
 
@@ -671,7 +697,7 @@ namespace Unity.UIWidgets.material {
             return value;
         }
 
-        public new bool sizedByParent {
+        protected override bool sizedByParent {
             get { return false; }
         }
 
@@ -723,7 +749,7 @@ namespace Unity.UIWidgets.material {
                 this.title.getMinIntrinsicHeight(width) + this.subtitle?.getMinIntrinsicHeight(width) ?? 0.0f);
         }
 
-        protected override float computeMaxIntrinsicHeight(float width) {
+        protected internal override float computeMaxIntrinsicHeight(float width) {
             return this.computeMinIntrinsicHeight(width);
         }
 
@@ -757,11 +783,23 @@ namespace Unity.UIWidgets.material {
             bool hasTrailing = this.trailing != null;
             bool isTwoLine = !this.isThreeLine && hasSubtitle;
             bool isOneLine = !this.isThreeLine && !hasSubtitle;
+            BoxConstraints maxIconHeightConstrains = new BoxConstraints(
+                maxHeight: this.isDense ? 48.0f: 56.0f
+            );
             BoxConstraints looseConstraints = this.constraints.loosen();
+            BoxConstraints iconConstraints = looseConstraints.enforce(maxIconHeightConstrains);
 
             float tileWidth = looseConstraints.maxWidth;
-            Size leadingSize = _layoutBox(this.leading, looseConstraints);
-            Size trailingSize = _layoutBox(this.trailing, looseConstraints);
+            Size leadingSize = _layoutBox(this.leading, iconConstraints);
+            Size trailingSize = _layoutBox(this.trailing, iconConstraints);
+            D.assert(
+                tileWidth != leadingSize.width,
+                () => "Leading widget consumes entire width. Please use a sized widget."
+            );
+            D.assert(
+                tileWidth != trailingSize.width,
+                () => "Trailing widget consumes entire width. Please use a sized widget."
+            );
 
             float titleStart = hasLeading
                 ? Mathf.Max(_minLeadingWidth, leadingSize.width) + _horizontalTitleGap
@@ -785,11 +823,13 @@ namespace Unity.UIWidgets.material {
                 D.assert(isOneLine);
             }
 
+            float defaultTileHeight = this._defaultTileHeight;
+
             float tileHeight = 0.0f;
             float titleY = 0.0f;
             float subtitleY = 0.0f;
             if (!hasSubtitle) {
-                tileHeight = Mathf.Max(this._defaultTileHeight, titleSize.height + 2.0f * _minVerticalPadding);
+                tileHeight = Mathf.Max(defaultTileHeight, titleSize.height + 2.0f * _minVerticalPadding);
                 titleY = (tileHeight - titleSize.height) / 2.0f;
             }
             else {
@@ -797,7 +837,7 @@ namespace Unity.UIWidgets.material {
                 titleY = titleBaseline - _boxBaseline(this.title, this.titleBaselineType);
                 subtitleY = subtitleBaseline -
                             _boxBaseline(this.subtitle, this.subtitleBaselineType ?? TextBaseline.alphabetic);
-                tileHeight = this._defaultTileHeight;
+                tileHeight = defaultTileHeight;
 
                 float titleOverlap = titleY + titleSize.height - subtitleY;
                 if (titleOverlap > 0.0f) {
@@ -813,8 +853,17 @@ namespace Unity.UIWidgets.material {
                 }
             }
 
-            float leadingY = (tileHeight - leadingSize.height) / 2.0f;
-            float trailingY = (tileHeight - trailingSize.height) / 2.0f;
+            float leadingY;
+            float trailingY;
+
+            if (tileHeight > 72.0f) {
+                leadingY = 16.0f;
+                trailingY = 16.0f;
+            }
+            else {
+                leadingY = Mathf.Min((tileHeight - leadingSize.height) / 2.0f, 16.0f);
+                trailingY = (tileHeight - trailingSize.height) / 2.0f;
+            }
 
             if (hasLeading) {
                 _positionBox(this.leading, new Offset(0.0f, leadingY));
